@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import os
 import pickle
 from collections.abc import Mapping
 from datetime import UTC, date, datetime
@@ -181,16 +180,18 @@ def test_malformed_md(tmp_path, text, key):
     assert key in str(exc.value)
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores file modes")
-def test_unreadable_md(tmp_path):
+def test_unreadable_md(tmp_path, monkeypatch):
     site = make_site(tmp_path, {"content/a.md": "x"})
-    path = tmp_path / "content/a.md"
-    path.chmod(0)
-    try:
-        with pytest.raises(ContentError, match=r"content/a\.md"):
-            load_pages(site)
-    finally:
-        path.chmod(0o644)
+    real = Path.read_text
+
+    def deny(self, *args, **kwargs):
+        if self.name == "a.md":
+            raise PermissionError(13, "Permission denied")
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", deny)
+    with pytest.raises(ContentError, match=r"content/a\.md"):
+        load_pages(site)
 
 
 def test_title_fallbacks(tmp_path):
