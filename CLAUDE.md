@@ -1,4 +1,4 @@
-# Python Template
+# deedum
 
 ## Commands
 
@@ -11,7 +11,7 @@
 
 uv, ruff (lint/format), ty (type check), pytest, poethepoet (task runner)
 
-Package lives in `python_template/` (no `src/`).
+Package lives in `deedum/` (no `src/`).
 
 ## Standards
 
@@ -110,3 +110,10 @@ cache. Don't copy version tags from older workflows or from memory.
 - ty-find's index goes stale after the hook's `ruff format` rewrites a file. The tell is
   `tyf refs <sym>` listing only the definition, or gerenuk reporting `selected` with an
   empty list. `uv run tyf daemon restart` fixes it.
+
+## Project docs
+
+Read before changing behaviour: [docs/constitution.md](docs/constitution.md),
+[docs/pitch.md](docs/pitch.md), [docs/architecture.md](docs/architecture.md) and
+[docs/decisions/](docs/decisions/) (newer decisions win). Every decision the user makes
+gets its own file in `docs/decisions/` in the same PR as the work.

@@ -1,0 +1,16 @@
+# orch repo config. Layers and roles: `orch guide tune`.
+
+# The gate: one command that must pass after every code change (tests + typecheck).
+gate_cmd = "uv run poe check"
+# Run once in each fresh review/QA worktree, e.g. "uv sync".
+setup_cmd = "uv sync"
+max_fix_rounds = 2
+remote = "origin"
+push = true
+# Open a PR for the run branch when the run is done (needs gh); orch never merges.
+open_pr = true
+
+# Per-role overrides, e.g.:
+# [role.dev]
+# model = "sonnet"
+# effort = "high"

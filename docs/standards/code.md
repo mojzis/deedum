@@ -1,6 +1,6 @@
 # Code
 
-- **Layout: `<repo>/<package>/`, no `src/`.** `python-template/python_template/`.
+- **Layout: `<repo>/<package>/`, no `src/`.** `deedum/deedum/`.
   Declare it in `[tool.hatch.build.targets.wheel] packages`.
 - **Entry points are routers.** `cli.py` and `web.py` only parse input and call a
   function that lives in its own module. Logic never sits in a command or a route,
