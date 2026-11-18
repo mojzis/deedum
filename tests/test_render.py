@@ -459,3 +459,37 @@ def test_load_site_rejects_leaky_base_url(tmp_path, bad):
     write(tmp_path, "deedum.toml", f'title = "T"\nbase_url = "{bad}"\n')
     with pytest.raises(ConfigError, match="base_url"):
         load_site(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("src", "exc_type"),
+    [("{{ 1 // 0 }}", ZeroDivisionError), ("{{ 1 + 'a' }}", TypeError)],
+)
+def test_runtime_error_wrapped(tmp_path, src, exc_type):
+    write(tmp_path, "templates/page.html", src)
+    env = make_env(Site(title="T", base_url=BASE, root=tmp_path), now=NOW)
+    with pytest.raises(RenderError) as exc:
+        render_page(env, make_page())
+    msg = str(exc.value)
+    assert all(
+        part in msg
+        for part in ["page.html", "blog/hello/", "line 1", exc_type.__name__]
+    )
+    assert type(exc.value.__cause__) is exc_type
+
+
+def test_builtin_page_wraps_long_text(tmp_path):
+    write(tmp_path, "deedum.toml", f'title = "T"\nbase_url = "{EX}"\n')
+    write(tmp_path, "content/about.md", "# A\n\nhttps://example.com/" + "a" * 300)
+    site = load_site(tmp_path)
+    (page,) = load_pages(site)
+    out = render_page(make_env(site, now=NOW), page)
+    assert "overflow-wrap:anywhere" in out
+    assert "pre{overflow-x:auto}" in out
+
+
+def test_image_query_keeps_dimensions(tmp_path):
+    png(tmp_path, "img/s.png")
+    out = head_of(full_site(tmp_path), full_page(image="img/s.png?v=2"))
+    assert 'og:image:width" content="1200"' in out
+    assert re.search(r'og:image" content="[^"]*/img/s\.png\?v=2"', out)

@@ -12,7 +12,7 @@ from markupsafe import Markup
 from PIL import Image
 
 from deedum.errors import RenderError
-from deedum.site import Page, Site, _is_external
+from deedum.site import Page, Site, _is_external, _split_suffix
 
 _BUILTIN_DIR = Path(__file__).parent / "templates"
 _HEAD = "deedum/head.html"
@@ -44,6 +44,7 @@ def _image_sizer(site: Site) -> Any:
 def _measure(static: Path, path: str) -> tuple[int, int] | None:
     if not path or _is_external(path):
         return None
+    path = _split_suffix(path)[0]
     file = (static / path.lstrip("/")).resolve()
     if not file.is_relative_to(static) or not file.is_file():
         return None
@@ -108,7 +109,7 @@ def make_env(
     return _build_env(site, loader, collections, data, now)
 
 
-def _location(env: jinja2.Environment, err: jinja2.TemplateError) -> str:
+def _location(env: jinja2.Environment, err: BaseException) -> str:
     """Template name and line where Jinja failed, or empty."""
     if isinstance(err, jinja2.TemplateSyntaxError):
         return f"{err.name}, line {err.lineno}" if err.name else f"line {err.lineno}"
@@ -124,6 +125,15 @@ def _location(env: jinja2.Environment, err: jinja2.TemplateError) -> str:
     return where
 
 
+def _render_msg(
+    env: jinja2.Environment, err: Exception, name: str, page: Page, *, kind: bool
+) -> str:
+    where = _location(env, err)
+    detail = f" ({where})" if where else ""
+    what = f"{type(err).__name__}: {err}" if kind else str(err)
+    return f"cannot render {name!r} for page {page.url!r}: {what}{detail}"
+
+
 def render_page(
     env: jinja2.Environment,
     page: Page,
@@ -136,10 +146,9 @@ def render_page(
     try:
         return env.get_template(name).render(page=page, **context)
     except jinja2.TemplateError as err:
-        where = _location(env, err)
-        detail = f" ({where})" if where else ""
-        msg = f"cannot render {name!r} for page {page.url!r}: {err}{detail}"
-        raise RenderError(msg) from err
+        raise RenderError(_render_msg(env, err, name, page, kind=False)) from err
+    except Exception as err:
+        raise RenderError(_render_msg(env, err, name, page, kind=True)) from err
 
 
 def head_tags(site: Site, page: Page) -> Markup:
