@@ -13,3 +13,7 @@ class DeedumError(Exception):
 
 class ConfigError(DeedumError):
     """The site configuration is missing, malformed or invalid."""
+
+
+class ContentError(DeedumError):
+    """A content file or data file is malformed or collides with another."""

@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import posixpath
 import re
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlsplit
+
+from markupsafe import Markup
 
 from deedum.errors import ConfigError
 
@@ -129,3 +134,36 @@ class Site:
 
 def _is_external(path: str) -> bool:
     return bool(_SCHEME.match(path)) or path.startswith(("//", "#"))
+
+
+@dataclass(frozen=True)
+class Page:
+    """One page of the site. Unknown frontmatter keys read as attributes."""
+
+    url: str
+    output: str
+    title: str
+    description: str
+    body: Markup
+    source: str
+    template: str
+    date: dt.date | None = None
+    updated: dt.date | None = None
+    collection: str = ""
+    image: str = ""
+    noindex: bool = False
+    lang: str = "en"
+    alternates: Mapping[str, str] = field(default_factory=dict, compare=False)
+    meta: Mapping[str, Any] = field(default_factory=dict, compare=False)
+    source_path: Path | None = None
+
+    def __getattr__(self, name: str) -> Any:
+        """Fall back to ``meta`` so a template's ``page.tags`` works."""
+        # Private names (copy/pickle probes) must not touch ``meta``: no recursion.
+        if name.startswith("_"):
+            raise AttributeError(name)
+        try:
+            return self.meta[name]
+        except KeyError:
+            msg = f"page {self.url!r} has no attribute or frontmatter key {name!r}"
+            raise AttributeError(msg) from None

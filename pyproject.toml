@@ -3,6 +3,11 @@ name = "deedum"
 version = "0.1.0"
 description = "Static HTML for small sites: templates from the target repo, head tags, favicons, sitemaps and feeds from deedum."
 requires-python = ">=3.11"
+dependencies = [
+    "markdown-it-py>=4.3.0",
+    "markupsafe>=3.0.4",
+    "pyyaml>=6.0.3",
+]
 
 [build-system]
 requires = ["hatchling"]
