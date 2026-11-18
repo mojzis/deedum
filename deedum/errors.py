@@ -17,3 +17,7 @@ class ConfigError(DeedumError):
 
 class ContentError(DeedumError):
     """A content file or data file is malformed or collides with another."""
+
+
+class RenderError(DeedumError):
+    """A template is missing, malformed or failed while rendering a page."""
