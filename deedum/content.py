@@ -164,7 +164,7 @@ def _first_paragraph(tokens: list[Token]) -> str:
 def _find_markdown(folder: Path) -> list[Path]:
     found: list[Path] = []
     for entry in sorted(folder.iterdir()):
-        if entry.name.startswith(("_", ".")):
+        if entry.name.startswith(("_", ".")) or entry.is_symlink():
             continue
         if entry.is_dir():
             found.extend(_find_markdown(entry))
@@ -213,9 +213,11 @@ def _load_page(site: Site, path: Path, rel: str) -> Page | None:
     body_text, yaml_text = _split_frontmatter(_read_text(path, rel), rel)
     meta = {} if yaml_text is None else _parse_frontmatter(yaml_text, rel)
     _check_types(meta, rel)
+    url = _url_for(rel_parts, meta.get("slug"), rel)
+    when = _as_date(meta.get("date"), "date", rel)
+    updated = _as_date(meta.get("updated"), "updated", rel)
     if meta.get("draft"):
         return None
-    url = _url_for(rel_parts, meta.get("slug"), rel)
     tokens = _MD.parse(body_text)
     description = meta.get("description") or _first_paragraph(tokens)
     h1, rendered = (None, tokens) if "title" in meta else _take_h1(tokens)
@@ -230,8 +232,8 @@ def _load_page(site: Site, path: Path, rel: str) -> Page | None:
         body=Markup(html),  # noqa: S704 -- owner-authored markdown, marked safe once here
         source=body_text,
         template=_template_for(site, collection, meta),
-        date=_as_date(meta.get("date"), "date", rel),
-        updated=_as_date(meta.get("updated"), "updated", rel),
+        date=when,
+        updated=updated,
         collection=collection,
         image=meta.get("image", ""),
         noindex=meta.get("noindex", False),
@@ -248,16 +250,17 @@ def load_pages(site: Site) -> list[Page]:
     if not content_root.is_dir():
         return []
     pages: dict[str, Page] = {}
+    sources: dict[str, str] = {}
     for path in _find_markdown(content_root):
         rel = _rel(site, path)
         page = _load_page(site, path, rel)
         if page is None:
             continue
-        if page.url in pages and pages[page.url].source_path is not None:
-            first = _rel(site, pages[page.url].source_path)  # ty: ignore[invalid-argument-type]
-            msg = f"{rel} and {first} both produce url '/{page.url}'"
+        if page.url in pages:
+            msg = f"{rel} and {sources[page.url]} both produce url '/{page.url}'"
             raise ContentError(msg, hint="rename one file or give it a `slug`")
         pages[page.url] = page
+        sources[page.url] = rel
     return [pages[url] for url in sorted(pages)]
 
 

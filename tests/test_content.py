@@ -417,3 +417,37 @@ def test_data_duplicate_stem(tmp_path):
         load_data(site)
     assert "data/tools.yaml" in str(exc.value)
     assert "data/tools.json" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    ("name", "fm", "key"),
+    [
+        ("content/bad.md", "slug: a/b", "slug"),
+        ("content/bad.md", "slug: '..'", "slug"),
+        ("content/index.md", "slug: a", "slug"),
+        ("content/bad.md", "date: nope", "date"),
+        ("content/bad.md", "updated: nope", "updated"),
+    ],
+)
+def test_invalid_draft_still_raises(tmp_path, name, fm, key):
+    text = FM.format(f"draft: true\n{fm}")
+    with pytest.raises(ContentError, match=name) as exc:
+        load_pages(make_site(tmp_path, {name: text}))
+    assert key in str(exc.value)
+
+
+def test_valid_draft_skipped(tmp_path):
+    assert pages_of(tmp_path, {"content/bad.md": "---\ndraft: true\n---\nx"}) == {}
+
+
+def test_symlinks_skipped(tmp_path):
+    outside = tmp_path / "outside"
+    (outside / "secret").mkdir(parents=True)
+    (outside / "secret/x.md").write_text("x")
+    (outside / "f.md").write_text("x")
+    site = make_site(tmp_path / "site", {"content/a.md": "a"})
+    content = site.root / "content"
+    (content / "loop").symlink_to(content, target_is_directory=True)
+    (content / "ext").symlink_to(outside, target_is_directory=True)
+    (content / "link.md").symlink_to(outside / "f.md")
+    assert [p.url for p in load_pages(site)] == ["a/"]
