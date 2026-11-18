@@ -60,6 +60,13 @@ def test_load_all_keys(tmp_path):
     assert s.twitter == "@mojzis"
 
 
+def test_allow_tracked_out(tmp_path):
+    write(tmp_path, BASE)
+    assert load_site(tmp_path, environ={}).allow_tracked_out is False
+    write(tmp_path, BASE + "allow_tracked_out = true\n")
+    assert load_site(tmp_path, environ={}).allow_tracked_out is True
+
+
 def test_pyproject_fallback(tmp_path):
     write(tmp_path, '[project]\nname = "x"\n\n[tool.deedum]\n' + BASE, "pyproject.toml")
     s = load_site(tmp_path, environ={})
@@ -139,6 +146,7 @@ def test_unknown_key_without_close_match(tmp_path):
     [
         ('relative_links = "yes"', "relative_links", "bool"),
         ("llms = 1", "llms", "bool"),
+        ('allow_tracked_out = "yes"', "allow_tracked_out", "bool"),
         ("lang = true", "lang", "string"),
         ('feeds = "blog"', "feeds", "array"),
         ("feeds = ['a', 2]", "feeds", "integer"),

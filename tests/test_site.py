@@ -125,3 +125,9 @@ def test_path_in_base_url_hints_base_path():
 def test_invalid_twitter():
     with pytest.raises(ConfigError, match="twitter"):
         make(twitter="a b")
+
+
+@pytest.mark.parametrize("field", ["base_url", "base_path", "twitter"])
+def test_non_string_fields_raise_config_error(field):
+    with pytest.raises(ConfigError, match=rf"Site\({field}\)"):
+        make(**{field: 1})

@@ -87,6 +87,7 @@ class Site:
     relative_links: bool = False
     feeds: tuple[str, ...] = ()
     llms: bool = False
+    allow_tracked_out: bool = False
     robots_extra_sitemaps: tuple[str, ...] = ()
     content: str = "content"
     templates: str = "templates"
@@ -99,6 +100,11 @@ class Site:
 
     def __post_init__(self) -> None:
         """Normalise and validate the fields whose format matters."""
+        for name in ("base_url", "base_path", "twitter"):
+            value = getattr(self, name)
+            if not isinstance(value, str):
+                msg = f"Site({name}) must be a string, got {type(value).__name__}"
+                raise ConfigError(msg)
         set_ = object.__setattr__
         set_(self, "base_url", normalise_base_url(self.base_url, "Site(base_url)"))
         set_(self, "base_path", normalise_base_path(self.base_path))

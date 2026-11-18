@@ -27,7 +27,7 @@ _STR_KEYS = (
     "favicon", "twitter", "analytics", "head_extra", "content", "templates",
     "static", "data", "out", "app", "theme_color",
 )  # fmt: skip
-_BOOL_KEYS = ("relative_links", "llms")
+_BOOL_KEYS = ("relative_links", "llms", "allow_tracked_out")
 _LIST_KEYS = ("feeds", "robots_extra_sitemaps")
 _KNOWN = (*_STR_KEYS, *_BOOL_KEYS, *_LIST_KEYS)
 

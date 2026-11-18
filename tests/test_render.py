@@ -493,3 +493,16 @@ def test_image_query_keeps_dimensions(tmp_path):
     out = head_of(full_site(tmp_path), full_page(image="img/s.png?v=2"))
     assert 'og:image:width" content="1200"' in out
     assert re.search(r'og:image" content="[^"]*/img/s\.png\?v=2"', out)
+
+
+BPATH = "/".join(["", "b", ""])
+
+
+def test_url_on_404_page_is_root_relative(tmp_path):
+    site = Site(
+        title="T", base_url=BASE, base_path=BPATH, relative_links=True, root=tmp_path
+    )
+    env = render_mod.make_env(site)
+    page = make_page(url="404.html", output="404.html")
+    html = render_mod.render_page(env, page, template="deedum/base.html")
+    assert f'href="{BPATH}"' in html

@@ -72,7 +72,8 @@ def _build_env(
     @jinja2.pass_context
     def url(ctx: Context, path: str) -> str:
         page = ctx.get("page")
-        if page is None:
+        # The 404 page is served at any depth: links must not be page-relative.
+        if page is None or page.output == "404.html":
             return site.url(path)
         return site.url(path, current=page.url)
 
