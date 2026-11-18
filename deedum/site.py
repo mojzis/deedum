@@ -33,6 +33,9 @@ def normalise_base_url(value: str, source: str) -> str:
     if parts.scheme not in ("http", "https") or not parts.hostname:
         msg = f"{source}: base_url {value!r} must be http(s)://host[:port]"
         raise ConfigError(msg, hint="example: https://mojzis.github.io")
+    if "@" in parts.netloc or parts.netloc.endswith(":"):
+        msg = f"{source}: base_url {value!r} must not have userinfo or an empty port"
+        raise ConfigError(msg, hint="use https://host or https://host:port")
     if parts.path.strip("/") or parts.query or parts.fragment:
         msg = f"{source}: base_url {value!r} must not have a path, query or fragment"
         raise ConfigError(

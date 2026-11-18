@@ -100,7 +100,16 @@ def test_direct_normalisation():
 
 @pytest.mark.parametrize(
     "bad",
-    ["e.org", "ftp://e.org", "https://e.org/p", "https://e.org?x", "https://e.org:bad"],
+    [
+        "e.org",
+        "ftp://e.org",
+        "https://e.org/p",
+        "https://e.org?x",
+        "https://e.org:bad",
+        "https://u:p@h.io",
+        "https://u@h.io",
+        "https://h.io:",
+    ],
 )
 def test_invalid_base_url(bad):
     with pytest.raises(ConfigError, match="base_url"):
