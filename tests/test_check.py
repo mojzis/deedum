@@ -203,6 +203,7 @@ def test_srcset_reports_only_the_missing_candidate(out):
     [
         ("a.png 1x, b.png 2x", ["a.png", "b.png"]),
         ("a.png 100w", ["a.png"]),
+        ("a.png, b.png 2x", ["a.png", "b.png"]),
         ("data:,x 1x, c.png", ["data:,x", "c.png"]),
         ("  ", []),
         ("", []),

@@ -18,6 +18,7 @@ from deedum.check import CheckReport, check_folder
 from deedum.config import DEEDUM_TOML, PYPROJECT, has_pyproject_table, load_site
 from deedum.errors import ConfigError, DeedumError
 from deedum.foreign import write_extras
+from deedum.scaffold import init_site, new_entry
 from deedum.site import Site, normalise_base_path
 
 AGENT = any(os.environ.get(v) for v in DEFAULT_AGENT_ENV_VARS)
@@ -192,6 +193,37 @@ def extras(
             _complain(
                 "hint: existing files were kept; pass --overwrite to refresh them"
             )
+
+
+@app.command()
+def init(
+    folder: Annotated[
+        Path, typer.Argument(help="The site folder; default is this one.")
+    ] = Path(),
+) -> None:
+    """Scaffold a site: config, home page, template override, Pages workflow."""
+    with _failures():
+        report = init_site(folder)
+        _say(_listing("written", report.written))
+        _say(_listing("skipped", report.skipped))
+        for hint in report.hints:
+            _say(hint)
+
+
+@app.command()
+def new(
+    collection: Annotated[str, typer.Argument(help="The collection folder name.")],
+    title: Annotated[str, typer.Argument(help="The entry title.")],
+    slug: Annotated[
+        str | None, typer.Option("--slug", help="File name; default is from the title.")
+    ] = None,
+    config: Config = None,
+) -> None:
+    """Create content/<collection>/<slug>.md with title and today's date."""
+    with _failures():
+        site = _site(config, None, None)
+        path = new_entry(site, collection, title, slug=slug)
+        _say(f"written {os.path.relpath(path)}")
 
 
 @app.command(name="guide")

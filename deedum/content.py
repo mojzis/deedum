@@ -64,6 +64,15 @@ def _parse_frontmatter(yaml_text: str, rel: str) -> dict[str, Any]:
     return data
 
 
+def validate_entry(text: str, rel: str) -> None:
+    """Raise ContentError unless ``text`` has valid frontmatter, as ``rel`` would."""
+    _, yaml_text = _split_frontmatter(text, rel)
+    meta = {} if yaml_text is None else _parse_frontmatter(yaml_text, rel)
+    _check_types(meta, rel)
+    for key in ("date", "updated"):
+        _as_date(meta.get(key), key, rel)
+
+
 def _check_types(meta: Mapping[str, Any], rel: str) -> None:
     for key in _RESERVED:
         if key in meta:

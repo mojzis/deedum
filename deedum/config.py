@@ -82,6 +82,30 @@ def has_pyproject_table(path: Path) -> bool:
         return False
 
 
+_REQ_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
+def pyproject_facts(path: Path) -> tuple[bool, bool]:
+    """``(has [tool.deedum], lists deedum in [project].dependencies)`` for ``path``.
+
+    A missing file gives ``(False, False)``; a malformed one raises ConfigError.
+    """
+    if not path.is_file():
+        return False, False
+    data = _read_toml(path)
+    project = data.get("project")
+    deps = project.get("dependencies") if isinstance(project, dict) else None
+    names = (
+        _REQ_NAME.match(dep.strip())
+        for dep in (deps if isinstance(deps, list) else [])
+        if isinstance(dep, str)
+    )
+    listed = any(
+        m and re.sub(r"[-_.]+", "-", m.group()).lower() == "deedum" for m in names
+    )
+    return _pyproject_table(data, path) is not None, listed
+
+
 def _locate(root: Path, config: Path | None) -> tuple[Path, dict[str, Any]]:
     """Resolve the config file and return its path and raw key table."""
     if config is not None:

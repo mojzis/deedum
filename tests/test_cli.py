@@ -433,3 +433,83 @@ def test_build_check_follows_out(site, tmp_path):
     put(site / "content" / "index.md", "# Home\n\n[x](../gone/)\n")
     result = run("build", "--check", "--out", str(tmp_path / "elsewhere"))
     assert result.exit_code == 1
+
+
+def test_init_lists_written_then_skipped(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    first = run("init")
+    again = run("init")
+    assert [first.exit_code, again.exit_code] == [0, 0]
+    assert first.stdout.startswith("written 5: deedum.toml")
+    assert first.stdout.endswith("skipped 0\n")
+    assert again.stdout.startswith("written 0\nskipped 5: deedum.toml (exists)")
+
+
+def test_init_takes_a_folder_and_hints_at_uv_add(tmp_path):
+    put(tmp_path / "s" / "pyproject.toml", '[project]\nname = "x"\n')
+    result = run("init", str(tmp_path / "s"))
+    assert result.exit_code == 0
+    assert result.stdout.splitlines()[-1] == "hint: run uv add deedum"
+    assert (tmp_path / "s" / "deedum.toml").is_file()
+
+
+def test_init_then_build_and_check_from_the_cli(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    run("init")
+    codes = [run("build").exit_code, run("check").exit_code]
+    assert codes == [0, 0]
+    strict = run("check", "--strict")
+    assert strict.exit_code == 1
+    assert strict.stdout.splitlines()[0] == "warning index.html: missing og:image"
+
+
+def test_init_with_a_malformed_pyproject_is_exit_2(tmp_path, monkeypatch):
+    put(tmp_path / "pyproject.toml", "[broken")
+    monkeypatch.chdir(tmp_path)
+    result = run("init")
+    assert result.exit_code == 2
+    assert not (tmp_path / "deedum.toml").exists()
+
+
+def test_new_prints_the_relative_path(site):
+    result = run("new", "blog", "Příliš žluťoučký kůň")
+    assert (result.exit_code, result.stderr) == (0, "")
+    assert result.stdout == "written content/blog/prilis-zlutoucky-kun.md\n"
+    assert run("build").exit_code == 0
+
+
+def test_new_twice_is_exit_1_and_changes_nothing(site):
+    run("new", "blog", "Same")
+    path = site / "content" / "blog" / "same.md"
+    before = path.read_bytes()
+    result = run("new", "blog", "Same")
+    assert result.exit_code == 1
+    assert "error:" in result.stderr
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "args", [["../x", "T"], ["_drafts", "T"], ["blog", "!!!"], ["blog\n", "T"]]
+)
+def test_new_bad_input_is_exit_2(site, args):
+    result = run("new", *args)
+    assert result.exit_code == 2
+    assert result.stderr.startswith("error:")
+
+
+def test_new_empty_slug_hint_and_slug_flag(site):
+    assert "hint: pass --slug" in run("new", "blog", "日本語").stderr
+    result = run("new", "blog", "日本語", "--slug", "nihongo")
+    assert result.stdout == "written content/blog/nihongo.md\n"
+
+
+def test_new_needs_a_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert run("new", "blog", "T").exit_code == 2
+
+
+def test_new_with_config_elsewhere(site, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = run("new", "blog", "T", "--config", str(site / "deedum.toml"))
+    assert result.exit_code == 0
+    assert (site / "content" / "blog" / "t.md").is_file()
