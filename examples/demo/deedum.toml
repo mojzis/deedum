@@ -1,0 +1,13 @@
+title = "Deedum demo"
+description = "A small site that uses every deedum feature."
+author = "Demo Author"
+lang = "en"
+base_url = "https://example.org"
+base_path = "/demo/"
+image = "social.png"
+favicon = "icon.svg"
+theme_color = "#2a6f97"
+twitter = "@deedum_demo"
+feeds = ["blog"]
+llms = true
+app = "demo_app:DemoApp"

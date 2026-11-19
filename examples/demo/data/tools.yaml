@@ -1,0 +1,12 @@
+- slug: ruff
+  name: Ruff
+  summary: A fast Python linter and formatter.
+  url: https://docs.astral.sh/ruff/
+- slug: uv
+  name: uv
+  summary: A fast Python package and project manager.
+  url: https://docs.astral.sh/uv/
+- slug: ty
+  name: ty
+  summary: A fast Python type checker.
+  url: https://docs.astral.sh/ty/

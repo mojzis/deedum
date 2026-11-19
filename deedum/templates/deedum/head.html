@@ -1,0 +1,69 @@
+{% block meta %}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{% if page.url == "" or not page.title or page.title == site.title %}
+<title>{{ site.title }}</title>
+{% else %}
+<title>{{ page.title }} | {{ site.title }}</title>
+{% endif %}
+{% if page.description %}
+<meta name="description" content="{{ page.description }}">
+{% endif %}
+<link rel="canonical" href="{{ absolute(page.url) }}">
+{% endblock %}
+{% block social %}
+{% set image = page.image or site.image %}
+<meta property="og:type" content="{{ 'article' if page.date else 'website' }}">
+{% if site.title %}
+<meta property="og:site_name" content="{{ site.title }}">
+{% endif %}
+{% if page.title %}
+<meta property="og:title" content="{{ page.title }}">
+{% endif %}
+{% if page.description %}
+<meta property="og:description" content="{{ page.description }}">
+{% endif %}
+<meta property="og:url" content="{{ absolute(page.url) }}">
+{% if page.lang %}
+<meta property="og:locale" content="{{ page.lang | replace('-', '_') }}">
+{% endif %}
+{% if image %}
+<meta property="og:image" content="{{ absolute(image) }}">
+{% set size = image_size(image) %}
+{% if size %}
+<meta property="og:image:width" content="{{ size[0] }}">
+<meta property="og:image:height" content="{{ size[1] }}">
+{% endif %}
+{% endif %}
+<meta name="twitter:card" content="{{ 'summary_large_image' if image else 'summary' }}">
+{% if site.twitter %}
+<meta name="twitter:site" content="{{ site.twitter }}">
+{% endif %}
+{% endblock %}
+{% block links %}
+{% include "deedum/favicon_links.html" %}
+{% if page.url == "" %}
+{% set feed_names = site.feeds | unique | list %}
+{% elif page.collection in site.feeds %}
+{% set feed_names = [page.collection] %}
+{% else %}
+{% set feed_names = [] %}
+{% endif %}
+{% for name in feed_names %}
+<link rel="alternate" type="application/atom+xml" title="{{ site.title }}: {{ name }}" href="{{ absolute(name + '/feed.xml') }}">
+{% endfor %}
+{% for lang, path in page.alternates | dictsort %}
+<link rel="alternate" hreflang="{{ lang }}" href="{{ absolute(path) }}">
+{% endfor %}
+{% endblock %}
+{% block robots %}
+{% if page.noindex %}
+<meta name="robots" content="noindex">
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if site.analytics %}
+<script defer data-domain="{{ site.analytics }}" src="https://plausible.io/js/script.js"></script>
+{% endif %}
+{{ head_extra }}
+{% endblock %}

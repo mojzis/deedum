@@ -1,0 +1,20 @@
+{% extends "page.html" %}
+{% block content %}
+{% if tool is defined %}
+<article>
+<h1>{{ tool.name }}</h1>
+<p>{{ tool.summary }}</p>
+<p><a href="{{ tool.url }}">{{ tool.name }} documentation</a></p>
+</article>
+{% else %}
+<article>
+<h1>{{ page.title }}</h1>
+<p>{{ tools | length | plural("tool") }}.</p>
+<ul>
+{% for t in tools %}
+<li><a href="{{ url('tools/' + t.slug + '/') }}">{{ t.name }}</a>: {{ t.summary }}</li>
+{% endfor %}
+</ul>
+</article>
+{% endif %}
+{% endblock %}

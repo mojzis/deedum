@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="{{ page.lang }}">
+<head>
+{% include "deedum/head.html" %}
+{% block head %}{% endblock %}
+<style>
+body{font:1rem/1.6 system-ui,sans-serif;max-width:40rem;margin:0 auto;padding:1rem;overflow-wrap:anywhere}
+pre{overflow-x:auto}
+img{max-width:100%}
+nav{margin-bottom:2rem}
+footer{margin-top:3rem}
+</style>
+</head>
+<body>
+{% block nav %}
+<nav><a href="{{ url('') }}">{{ site.title }}</a></nav>
+{% endblock %}
+{% block content %}{% endblock %}
+{% block footer %}{% endblock %}
+</body>
+</html>

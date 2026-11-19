@@ -3,6 +3,21 @@ name = "deedum"
 version = "0.1.0"
 description = "Static HTML for small sites: templates from the target repo, head tags, favicons, sitemaps and feeds from deedum."
 requires-python = ">=3.11"
+dependencies = [
+    "jinja2>=3.1.6",
+    "markdown-it-py>=4.3.0",
+    "markupsafe>=3.0.4",
+    "pillow>=13.0.0",
+    "pyyaml>=6.0.3",
+    "resvg-py>=0.5.0",
+    "rich>=15.0.0",
+    "typer>=0.29.2",
+    "typer-agentic>=0.1.10",
+    "watchfiles>=1.3.0",
+]
+
+[project.scripts]
+deedum = "deedum.cli:main"
 
 [build-system]
 requires = ["hatchling"]
