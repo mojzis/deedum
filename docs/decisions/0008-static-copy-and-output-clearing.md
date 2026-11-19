@@ -16,8 +16,17 @@ The builder copies static files into, and deletes from, a folder on the user's d
 - The builder refuses (`ConfigError`) when the resolved output folder is: the
   filesystem root, home, the site root or a parent of it, a folder containing or equal
   to the content, templates, static or data folder, or **inside** one of those (copying
-  static into static would recurse). It also refuses a symlink or a non-folder.
-- A static `CNAME` overwrites the preserved one.
+  static into static would recurse). It also refuses a symlink, a non-folder, and a
+  folder that is or is inside a `.git` folder (checked first, before touching disk).
+- A static `CNAME` overwrites the preserved one; `render()` to `CNAME` is a
+  `ContentError`.
+- No output, from render or static, may have a `.git` path component at any depth
+  (`ContentError`, "reserved path"). Static copying skips every entry named `.git`
+  (file, folder or symlink) at any depth and does not count it.
+- `copy_static` raises `ContentError` when its source equals, contains, or lies inside
+  the output folder.
+- Render paths with empty or `.` segments (`a//b/`, `./a/`) are rejected so the page
+  URL always equals the written path.
 - The 404 page uses root-relative links even with `relative_links = true`, because the
   host serves it at any depth.
 

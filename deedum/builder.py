@@ -55,6 +55,8 @@ def _refuse(out: Path, reason: str) -> ConfigError:
 
 def _check_out(site: Site, out: Path, raw: Path) -> None:
     """Raise ConfigError unless ``out`` is safe to clear (R19)."""
+    if ".git" in out.parts or ".git" in raw.parts:
+        raise _refuse(out, "it is or is inside a .git folder")
     if raw.is_symlink():
         raise _refuse(out, "it is a symlink")
     if out.exists() and not out.is_dir():
@@ -74,15 +76,15 @@ def _check_out(site: Site, out: Path, raw: Path) -> None:
             raise _refuse(out, f"it is inside the source folder {name!r}")
 
 
-def _tracked_files(site: Site, out: Path) -> list[str]:
-    """Tracked files under ``out`` per ``git ls-files``; empty if unknowable."""
+def _tracked_files(out: Path) -> list[str]:
+    """Tracked files under ``out`` in the repo holding it; empty if unknowable."""
     git = shutil.which("git")
     if git is None:
         return []
     try:
         done = subprocess.run(  # noqa: S603 -- fixed argv, resolved git path, no shell
-            [git, "ls-files", "-z", "--", str(out)],
-            cwd=site.root,
+            [git, "ls-files", "-z"],
+            cwd=out,
             capture_output=True,
             check=False,
             timeout=_GIT_TIMEOUT,
@@ -94,8 +96,8 @@ def _tracked_files(site: Site, out: Path) -> list[str]:
     return [f.decode("utf-8", "replace") for f in done.stdout.split(b"\0") if f]
 
 
-def _guard_tracked(site: Site, out: Path) -> None:
-    tracked = _tracked_files(site, out)
+def _guard_tracked(out: Path) -> None:
+    tracked = _tracked_files(out)
     if not tracked:
         return
     shown = ", ".join(tracked[:_MAX_LISTED])
@@ -128,6 +130,10 @@ def _output_for(path: str) -> str:
     if ".." in path.split("/"):
         msg = f"invalid page path {path!r}: must not contain '..'"
         raise ContentError(msg)
+    segments = path.removesuffix("/").split("/") if path else []
+    if any(seg in {"", "."} for seg in segments):
+        msg = f"invalid page path {path!r}: empty or '.' segment"
+        raise ContentError(msg)
     if path == "" or path.endswith("/"):
         path += "index.html"
     return posixpath.normpath(path)
@@ -141,6 +147,8 @@ class Builder:
     mid-build (say a template error in ``render``) leaves the files already
     written in place: the output is partial and there is no rollback.
     ``finish`` is then never reached, so no sitemap claims a full site.
+    A failed ``render`` keeps its path claimed, so restart the build with a
+    new Builder.
     """
 
     def __init__(  # noqa: PLR0913 -- one keyword per documented knob
@@ -159,7 +167,7 @@ class Builder:
         self.out = raw.resolve()
         _check_out(site, self.out, raw)
         if self.out.exists() and not (force_clear or site.allow_tracked_out):
-            _guard_tracked(site, self.out)
+            _guard_tracked(self.out)
         self.out.mkdir(parents=True, exist_ok=True)
         _clear(self.out)
         self._env = make_env(site, collections=collections, data=data, now=now)
@@ -172,6 +180,9 @@ class Builder:
     def _claim(self, output: str, origin: str) -> Path:
         """Record ``output`` as written by ``origin``; return its safe target."""
         key = posixpath.normpath(output)
+        if ".git" in key.split("/"):
+            msg = f"{origin} would write to a reserved path: {output!r}"
+            raise ContentError(msg)
         if key in self._origins:
             msg = f"output {key!r} is written by both {self._origins[key]} and {origin}"
             raise ContentError(msg)
@@ -198,6 +209,9 @@ class Builder:
         """Render ``template`` to the site-relative URL ``path``; return the file."""
         self._check_open()
         output = _output_for(path)
+        if output == "CNAME":
+            msg = "render would overwrite the reserved CNAME file"
+            raise ContentError(msg)
         if page is None:
             page = Page(
                 url=path,
@@ -227,15 +241,25 @@ class Builder:
         base = Path(self.site.root / self.site.static if src is None else src)
         if not base.is_dir():
             return 0
+        resolved = base.resolve()
+        if (
+            resolved == self.out
+            or self.out in resolved.parents
+            or resolved in self.out.parents
+        ):
+            msg = (
+                f"static source {str(resolved)!r} and output folder "
+                f"{str(self.out)!r} are the same, or one is inside the other"
+            )
+            raise ContentError(msg)
         count = 0
         stack = [base]
         while stack:
             for entry in sorted(stack.pop().iterdir()):
-                if entry.is_symlink():
+                if entry.is_symlink() or entry.name == ".git":
                     continue
                 if entry.is_dir():
-                    if entry.name != ".git":
-                        stack.append(entry)
+                    stack.append(entry)
                 elif entry.is_file():
                     rel = entry.relative_to(base).as_posix()
                     target = self._claim(rel, f"static file {str(entry)!r}")
@@ -248,6 +272,11 @@ class Builder:
     def finish(self) -> BuildReport:
         """Write the 404 page, sitemap, robots file and ``.nojekyll``."""
         self._check_open()
+        for name, label in _EXTRAS.items():
+            if name in self._origins:
+                first = self._origins[name]
+                msg = f"output {name!r} is written by both {first} and extra:{label}"
+                raise ContentError(msg)
         for name, label in _EXTRAS.items():
             self._claim(name, f"extra:{label}")
         written = [

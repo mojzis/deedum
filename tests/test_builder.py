@@ -469,3 +469,101 @@ def test_sitemap_lists_only_html_pages(tmp_path):
     text = (b.out / "sitemap.xml").read_text()
     assert "https://ex.org/b/a/" in text
     assert "feed.xml" not in text
+
+
+def git_tree_hash(root: Path) -> str:
+    h = hashlib.sha256()
+    for p in sorted(root.rglob("*")):
+        h.update(str(p.relative_to(root)).encode())
+        if p.is_file():
+            h.update(p.read_bytes())
+    return h.hexdigest()
+
+
+@pytest.mark.parametrize("out", [".git", ".git/x"])
+def test_out_inside_dot_git_refused(tmp_path, out):
+    site = make_site(tmp_path)
+    git_repo(site)
+    track(site, "a.txt")
+    before = git_tree_hash(site.root / ".git")
+    with pytest.raises(ConfigError, match=r"\.git folder"):
+        Builder(site, out)
+    assert git_tree_hash(site.root / ".git") == before
+
+
+def test_out_absolute_through_other_dot_git_refused(tmp_path):
+    site = make_site(tmp_path)
+    put(tmp_path / "other/.git/HEAD", "ref")
+    with pytest.raises(ConfigError, match=r"\.git folder"):
+        Builder(site, tmp_path / "other/.git/sub")
+    assert (tmp_path / "other/.git/HEAD").read_text() == "ref"
+
+
+@pytest.mark.parametrize("path", [".git/config", ".git/hooks/x/", ".git/", "CNAME"])
+def test_render_reserved_paths_refused(tmp_path, path):
+    site = make_site(tmp_path)
+    out = tmp_path / "out"
+    put(out / ".git/config", "cfg")
+    put(out / "CNAME", "ex.org")
+    b = Builder(site, out)
+    before = snapshot(out)
+    with pytest.raises(ContentError):
+        b.render("page.html", path)
+    assert snapshot(out) == before
+    assert before == {
+        ".git/config": hashlib.sha256(b"cfg").hexdigest(),
+        "CNAME": hashlib.sha256(b"ex.org").hexdigest(),
+    }
+
+
+def test_static_dot_git_file_skipped_and_cname_overwrites(tmp_path):
+    site = make_site(tmp_path)
+    put(site.root / "static/.git", "gitfile")
+    put(site.root / "static/sub/.git", "gitfile")
+    put(site.root / "static/CNAME", "new.org")
+    out = tmp_path / "out"
+    put(out / ".git/config", "cfg")
+    b = Builder(site, out)
+    assert b.copy_static() == 1
+    assert files(b.out) == [".git/config", "CNAME"]
+    assert (out / "CNAME").read_text() == "new.org"
+
+
+def test_copy_static_src_overlapping_out_refused(tmp_path):
+    site = make_site(tmp_path)
+    put(site.root / "keep.txt")
+    b = Builder(site, "o4")
+    for src in (b.out, site.root):
+        with pytest.raises(ContentError, match="inside the other"):
+            b.copy_static(src)
+    assert files(b.out) == []
+    assert not (b.out / "o4").exists()
+
+
+def test_guard_checks_repo_holding_out(tmp_path):
+    site = make_site(tmp_path)
+    git_repo(site)
+    (tmp_path / "b").mkdir()
+    other = make_site(tmp_path / "b")
+    git_repo(other)
+    keep = track(other, "pub/t.html")
+    with pytest.raises(ConfigError, match=r"t\.html"):
+        Builder(site, keep.parent)
+    assert keep.exists()
+
+
+def test_finish_retry_reports_real_collision(tmp_path):
+    site = make_site(tmp_path)
+    put(site.root / "static/robots.txt")
+    b = Builder(site, tmp_path / "out")
+    b.copy_static()
+    for _ in range(2):
+        with pytest.raises(ContentError, match=r"robots\.txt.*extra:robots"):
+            b.finish()
+
+
+@pytest.mark.parametrize("path", ["a//b/", "./a/", "a/./b/", "a/."])
+def test_render_rejects_empty_and_dot_segments(tmp_path, path):
+    b = Builder(make_site(tmp_path), tmp_path / "out")
+    with pytest.raises(ContentError, match=r"empty or '\.' segment"):
+        b.render("page.html", path)

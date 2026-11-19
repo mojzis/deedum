@@ -10,7 +10,7 @@ The builder clears the output folder on every build. A repo that tracks its outp
 
 ## Decision
 
-Before clearing, run `git ls-files` for the output folder in the site's repo. If any
+Before clearing, run `git ls-files` inside the output folder, i.e. in the repo containing the output folder (not necessarily the site's repo). If any
 file is tracked, refuse, change nothing, and name up to 5 files plus the total. Outside
 a git repo, or without `git` on PATH, the check is skipped silently.
 
