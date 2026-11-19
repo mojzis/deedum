@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,7 @@ import deedum
 from deedum import DeedumError, Page
 
 _FIELDS = ("slug", "name", "summary", "url")
+_SLUG = re.compile(r"[a-z0-9][a-z0-9-]*")
 
 
 def _plural(count: int, word: str) -> str:
@@ -43,6 +45,12 @@ class DemoApp(deedum.App):
                 if not isinstance(entry.get(key), str) or not entry[key].strip():
                     msg = f"data/tools.yaml entry {number}: missing or empty {key!r}"
                     raise DeedumError(msg)
+            if not _SLUG.fullmatch(entry["slug"]):
+                msg = (
+                    f"data/tools.yaml entry {number}: invalid slug {entry['slug']!r} "
+                    "(lowercase letters, digits and '-' only)"
+                )
+                raise DeedumError(msg)
             if entry["slug"] in seen:
                 msg = (
                     f"data/tools.yaml entry {number}: duplicate slug {entry['slug']!r}"
@@ -86,7 +94,8 @@ class DemoApp(deedum.App):
             return {"tools": self._tools}
         if page.url.startswith("tools/"):
             slug = page.url.split("/")[1]
-            return {"tool": next(t for t in self._tools if t["slug"] == slug)}
+            tool = next((t for t in self._tools if t["slug"] == slug), None)
+            return {} if tool is None else {"tool": tool}
         if page.collection == "blog" and page.url != "blog/":
             return {"related": [p for p in self._posts if p.url != page.url]}
         return {}

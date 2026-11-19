@@ -271,6 +271,13 @@ def dup_slug(entries: list[dict[str, str]]) -> None:
     entries[1]["slug"] = entries[0]["slug"]
 
 
+def slug_setter(value: str) -> Callable[[list[dict[str, str]]], None]:
+    def edit(entries: list[dict[str, str]]) -> None:
+        entries[0]["slug"] = value
+
+    return edit
+
+
 def not_a_mapping(entries: list[dict[str, str]]) -> None:
     entries.insert(0, "ruff")  # ty: ignore[invalid-argument-type]
 
@@ -281,6 +288,9 @@ def not_a_mapping(entries: list[dict[str, str]]) -> None:
         (drop_slug, "entry 1: missing or empty 'slug'"),
         (dup_slug, "entry 2: duplicate slug 'ruff'"),
         (not_a_mapping, "entry 1: expected a mapping"),
+        (slug_setter("a/b"), "entry 1: invalid slug 'a/b'"),
+        (slug_setter(".hidden"), "entry 1: invalid slug '.hidden'"),
+        (slug_setter(" x"), "entry 1: invalid slug ' x'"),
     ],
 )
 def test_malformed_tool_data(
@@ -297,6 +307,13 @@ def test_malformed_tool_data(
     assert "app hook 'load_pages' (demo_app:DemoApp) failed" in result.output
     assert message in result.output
     assert not out.exists()
+
+
+def test_every_page_has_exactly_one_h1(out: Path) -> None:
+    pages = sorted(out.rglob("index.html"))
+    assert pages
+    counts = {p: p.read_text(encoding="utf-8").count("<h1") for p in pages}
+    assert {p: n for p, n in counts.items() if n != 1} == {}
 
 
 def test_tools_file_that_is_not_a_list(tmp_path: Path) -> None:
