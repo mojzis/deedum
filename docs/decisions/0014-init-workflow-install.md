@@ -20,6 +20,7 @@ has no deedum, and the target folder may or may not be a Python project.
   major tag when it exists (`actions/checkout@v7`, `actions/upload-pages-artifact@v5`,
   `actions/deploy-pages@v5`) and the full version when it doesn't
   (`astral-sh/setup-uv@v10.3.3`).
+- The workflow uploads the `out` of an existing `deedum.toml` or `[tool.deedum]` (raw value, so a placeholder `base_url` is fine), default `_site`; an unreadable config exits 2 before any write, and an absolute or `..` `out` keeps `_site` with a hint.
 - `init` never overwrites: an existing workflow is skipped and listed.
 
 ## Consequences

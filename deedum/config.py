@@ -137,6 +137,19 @@ def _locate(root: Path, config: Path | None) -> tuple[Path, dict[str, Any]]:
     return pyproject, table
 
 
+def existing_out(root: Path) -> str | None:
+    """The raw ``out`` of the config in ``root``, or None when none is set.
+
+    Reads only the raw table, so a placeholder or missing ``base_url`` is fine.
+    Raises ConfigError when there is a config and it cannot be read.
+    """
+    has_toml = (root / DEEDUM_TOML).is_file()
+    if not has_toml and not has_pyproject_table(root / PYPROJECT):
+        return None
+    value = _locate(root, None)[1].get("out")
+    return value if isinstance(value, str) else None
+
+
 def _check_table(table: dict[str, Any], path: Path) -> dict[str, Any]:
     """Reject unknown keys and wrong types; return the validated values."""
     values: dict[str, Any] = {}

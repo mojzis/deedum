@@ -7,6 +7,7 @@ created with exclusive create, and every folder on the way is checked first.
 from __future__ import annotations
 
 import datetime as dt
+import json
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -15,12 +16,13 @@ from pathlib import Path
 import jinja2
 import yaml
 
-from deedum.config import DEEDUM_TOML, PYPROJECT, pyproject_facts
+from deedum.config import DEEDUM_TOML, PYPROJECT, existing_out, pyproject_facts
 from deedum.content import validate_entry
 from deedum.errors import ConfigError, ContentError, DeedumError
 from deedum.site import Site
 
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+_PLAIN = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]*")
 _REPO = "https://github.com/mojzis/deedum"
 WORKFLOW = ".github/workflows/pages.yml"
 
@@ -90,7 +92,7 @@ jobs:
       - run: {command}
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: _site
+          path: {out}
   deploy:
     needs: build
     runs-on: ubuntu-latest
@@ -146,6 +148,17 @@ def _create(root: Path, rel: str, text: str | None) -> str | None:
     return None
 
 
+def _upload_path(out: str | None) -> tuple[str, str | None]:
+    """The workflow's upload path for config value ``out``, and a hint if unusable."""
+    if out is None:
+        return "_site", None
+    parts = Path(out).parts
+    if not out.strip() or Path(out).is_absolute() or ".." in parts:
+        hint = "hint: the Pages workflow uploads _site; set path: to your out folder"
+        return "_site", hint
+    return (out if _PLAIN.fullmatch(out) else json.dumps(out)), None
+
+
 def init_site(folder: Path) -> InitReport:
     """Scaffold a site in ``folder``: config, home page, template override, workflow.
 
@@ -155,6 +168,7 @@ def init_site(folder: Path) -> InitReport:
     folder = Path(folder)
     has_table, listed = pyproject_facts(folder / PYPROJECT)
     pyproject = (folder / PYPROJECT).is_file()
+    out, out_hint = _upload_path(existing_out(folder))
     command = (
         "uv sync && uv run deedum build --check"
         if pyproject
@@ -169,7 +183,7 @@ def init_site(folder: Path) -> InitReport:
         ("content/index.md", _HOME),
         ("templates/page.html", _PAGE),
         ("static/", None),
-        (WORKFLOW, _WORKFLOW.format(command=command)),
+        (WORKFLOW, _WORKFLOW.format(command=command, out=out)),
     ]
     report = InitReport()
     for rel, text in plan:
@@ -181,6 +195,8 @@ def init_site(folder: Path) -> InitReport:
             report.written.append(rel)
         else:
             report.skipped.append(f"{rel} ({why})")
+    if out_hint:
+        report.hints.append(out_hint)
     if pyproject and not listed:
         report.hints.append("hint: run uv add deedum")
     return report

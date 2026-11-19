@@ -465,3 +465,55 @@ def test_unreadable_template_is_an_error(site):
     (site.root / "templates" / "new" / "blog.md").write_bytes(b"\xff\xfe")
     with pytest.raises(ContentError, match=r"new/blog\.md"):
         entry(site, "blog", "T")
+
+
+# ---- init: workflow upload path follows an existing `out` --------------------
+
+KEYS = 'title = "x"\nbase_url = "https://e.x"\n'
+
+
+def _upload(folder: Path) -> str:
+    text = (folder / WORKFLOW).read_text()
+    match = re.search(r"^\s+path: (.*)$", text, flags=re.M)
+    assert match
+    return match.group(1)
+
+
+def test_workflow_uploads_the_out_of_an_existing_deedum_toml(folder):
+    put(folder / "deedum.toml", KEYS + 'out = "build"\n')
+    init_site(folder)
+    assert _upload(folder) == "build"
+
+
+def test_workflow_uploads_the_out_of_a_pyproject_table(folder):
+    put(folder / "pyproject.toml", "[tool.deedum]\n" + KEYS + 'out = "build"\n')
+    init_site(folder)
+    assert _upload(folder) == "build"
+
+
+def test_workflow_uploads_site_by_default(folder):
+    put(folder / "deedum.toml", KEYS)
+    init_site(folder)
+    assert _upload(folder) == "_site"
+
+
+def test_a_malformed_existing_config_fails_before_any_write(folder):
+    put(folder / "deedum.toml", "title = [")
+    with pytest.raises(ConfigError):
+        init_site(folder)
+    assert not (folder / "content").exists()
+    assert not (folder / ".github").exists()
+
+
+@pytest.mark.parametrize("out", ["/abs/out", "../up", ""])
+def test_an_unusable_out_keeps_site_and_hints(folder, out):
+    put(folder / "deedum.toml", KEYS + f'out = "{out}"\n')
+    report = init_site(folder)
+    assert _upload(folder) == "_site"
+    assert any("uploads _site" in h for h in report.hints)
+
+
+def test_an_out_needing_quotes_is_quoted(folder):
+    put(folder / "deedum.toml", KEYS + 'out = "my site: x"\n')
+    init_site(folder)
+    assert _upload(folder) == '"my site: x"'
