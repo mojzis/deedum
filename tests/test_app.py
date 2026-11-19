@@ -322,3 +322,12 @@ def test_rebuild_with_same_now_is_byte_identical(tmp_path):
 def test_app_exported():
     assert deedum.App is App
     assert Page
+
+
+def test_unloadable_spec_is_an_app_error(tmp_path, monkeypatch):
+    site = app_site(tmp_path)
+    monkeypatch.setattr(
+        "deedum.app.importlib.util.spec_from_file_location", lambda *a, **k: None
+    )
+    with pytest.raises(ConfigError, match="cannot load"):
+        load_app(site)
