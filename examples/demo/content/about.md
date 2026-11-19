@@ -3,8 +3,6 @@ title: About
 description: What this demo site shows.
 ---
 
-# About
-
 The demo covers pages from markdown, a dated collection with a feed, pages made from
 data, template overrides, an `App` with all five hooks, and the `llms.txt` files.
 
