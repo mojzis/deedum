@@ -111,6 +111,10 @@ class Site:
         set_(self, "base_url", normalise_base_url(self.base_url, "Site(base_url)"))
         set_(self, "base_path", normalise_base_path(self.base_path))
         set_(self, "twitter", normalise_twitter(self.twitter, "Site(twitter)"))
+        for name in ("feeds", "robots_extra_sitemaps"):
+            if isinstance(getattr(self, name), str):
+                msg = f"Site({name}) must be a list of strings, not a bare string"
+                raise ConfigError(msg, hint=f"use {name} = ['...'] (a list)")
         set_(self, "feeds", tuple(self.feeds))
         _check_feeds_and_color(self)
         set_(self, "robots_extra_sitemaps", tuple(self.robots_extra_sitemaps))
@@ -147,13 +151,16 @@ class Site:
 def _check_feeds_and_color(site: Site) -> None:
     """Feed names become folder names and the colour lands in a manifest."""
     for name in site.feeds:
-        if not isinstance(name, str) or not _FEED_NAME.match(name):
+        if not isinstance(name, str) or not _FEED_NAME.fullmatch(name):
             msg = (
                 f"Site(feeds) has the invalid name {name!r}: use one folder name "
                 "of letters, digits, '-', '_' and '.', not starting with '.'"
             )
             raise ConfigError(msg)
-    if not isinstance(site.theme_color, str) or not _COLOR.match(site.theme_color):
+        if name == "CNAME":
+            msg = "Site(feeds) must not use the name 'CNAME': it is a reserved file"
+            raise ConfigError(msg)
+    if not isinstance(site.theme_color, str) or not _COLOR.fullmatch(site.theme_color):
         msg = f"Site(theme_color) {site.theme_color!r} must be #rgb or #rrggbb"
         raise ConfigError(msg, hint="example: theme_color = '#1a73e8'")
 

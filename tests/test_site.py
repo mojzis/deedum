@@ -158,3 +158,20 @@ def test_invalid_theme_color(bad):
 @pytest.mark.parametrize("good", ["#fff", "#FFFFFF", "#1a73e8"])
 def test_valid_theme_color(good):
     assert make(theme_color=good).theme_color == good
+
+
+@pytest.mark.parametrize("name", ["blog\n", "CNAME"])
+def test_feed_name_trailing_newline_and_cname_rejected(name):
+    with pytest.raises(ConfigError, match="feeds"):
+        make(feeds=(name,))
+
+
+def test_theme_color_trailing_newline_rejected():
+    with pytest.raises(ConfigError, match="theme_color"):
+        make(theme_color="#fff\n")
+
+
+@pytest.mark.parametrize("field", ["feeds", "robots_extra_sitemaps"])
+def test_bare_string_list_fields_rejected(field):
+    with pytest.raises(ConfigError, match=field):
+        make(**{field: "blog"})
