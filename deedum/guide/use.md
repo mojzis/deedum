@@ -12,7 +12,8 @@ Configured here. Pick the way in that fits, take the first that applies.
    `builder.copy_static()`, `builder.finish()`.
 4. **A folder something else built:** `uv run deedum extras DIR` adds the sitemap,
    robots.txt, favicons and `.nojekyll`. It skips files that already exist; add
-   `--overwrite` to replace them. It never edits your HTML.
+   `--overwrite` to replace them (after content changes, rerun with `--overwrite`).
+   It never edits your HTML.
 
 Reading the result of `build`: three lines on stdout, `pages N`, `static N`,
 `extras N: paths`. Errors go to stderr as `error: ...` with an optional `hint: ...`.

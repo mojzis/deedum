@@ -27,3 +27,4 @@ may run the command again after a rebuild.
 - Safe to run on a folder the user cares about; the cost is one flag to refresh files.
 - The sitemap is not refreshed automatically after the HTML changes: rerun with
   `--overwrite`.
+- `extras` scans only lowercase `*.html`; `.HTML` files are not listed in the sitemap.

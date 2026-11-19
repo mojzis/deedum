@@ -52,5 +52,6 @@ the `builtin/` prefix.
 - Loading `app` runs that Python file: it is trusted code.
 - `build` refuses `.git`, symlinks, the home folder, the site root and source folders.
 - `extras` refuses a symlinked or `.git` folder and any symlinked target.
+- `extras` scans only lowercase `*.html`; `.HTML` files are not listed in the sitemap.
 
 next: `uv run deedum build`

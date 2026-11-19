@@ -135,6 +135,10 @@ def extras(
         if report.links:
             _say("")
             _say(report.links)
+        if report.skipped and not report.written:
+            _complain(
+                "hint: existing files were kept; pass --overwrite to refresh them"
+            )
 
 
 @app.command(name="guide")

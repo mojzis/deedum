@@ -341,3 +341,11 @@ def test_every_command_named_in_the_pages_exists(tmp_path):
     assert named
     assert named <= commands
     assert {"build", "extras", "guide"} <= named
+
+
+def test_extras_rerun_hints_at_overwrite(site, foreign):
+    run("extras", str(foreign))
+    result = run("extras", str(foreign))
+    assert result.exit_code == 0
+    assert "hint:" in result.stderr
+    assert "--overwrite" in result.stderr
