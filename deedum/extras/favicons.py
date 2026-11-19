@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import shutil
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from PIL import Image
@@ -19,7 +21,7 @@ SVG = "favicon.svg"
 APPLE = "apple-touch-icon.png"
 MANIFEST = "site.webmanifest"
 _PNG_SIZES = {APPLE: 180, "icon-192.png": 192, "icon-512.png": 512}
-_PROBE_WIDTH = 64
+MAX_RATIO = 16
 
 
 def output_names(site: Site) -> list[str]:
@@ -48,6 +50,27 @@ def source_path(site: Site) -> Path:
     return Path(site.root / site.favicon)
 
 
+def _number(text: str | None) -> float | None:
+    """Leading number of an SVG length such as ``200`` or ``64px``; else None."""
+    match = re.match(r"\s*([0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)", text or "")
+    return float(match.group(1)) if match else None
+
+
+def _svg_size(path: Path) -> tuple[float, float]:
+    """Width and height of the SVG root from ``viewBox``, else ``width``/``height``."""
+    try:
+        _, root = next(ET.iterparse(path, events=("start",)))  # noqa: S314 -- trusted
+    except (StopIteration, ET.ParseError, OSError) as err:
+        raise _fail(path, f"is not readable SVG ({err})") from err
+    box = (root.get("viewBox") or "").replace(",", " ").split()
+    sizes = [_number(box[2]), _number(box[3])] if len(box) == 4 else []  # noqa: PLR2004
+    if len(sizes) != 2 or not all(sizes):  # noqa: PLR2004
+        sizes = [_number(root.get("width")), _number(root.get("height"))]
+    if not (sizes[0] and sizes[1]):
+        raise _fail(path, "needs a viewBox or width/height")
+    return sizes[0], sizes[1]
+
+
 def _rasterise_svg(path: Path) -> Image.Image:
     """Render at 512 px on the longer side, centred on a transparent square."""
 
@@ -56,17 +79,18 @@ def _rasterise_svg(path: Path) -> Image.Image:
     except ImportError as err:
         raise _fail(path, "SVG sources need the resvg-py package") from err
 
-    def render(width: int | None = None, height: int | None = None) -> Image.Image:
-        png = resvg_py.svg_to_bytes(svg_path=str(path), width=width, height=height)
-        return Image.open(io.BytesIO(bytes(png))).convert("RGBA")
-
+    width, height = _svg_size(path)
+    ratio = max(width, height) / min(width, height)
+    if ratio > MAX_RATIO:
+        raise _fail(path, f"aspect ratio {ratio:.1f}:1 is above {MAX_RATIO}:1")
+    wide = width >= height
     try:
-        probe = render(width=_PROBE_WIDTH)
-        image = (
-            render(width=MASTER)
-            if probe.height <= _PROBE_WIDTH
-            else render(height=MASTER)
+        png = resvg_py.svg_to_bytes(
+            svg_path=str(path),
+            width=MASTER if wide else None,
+            height=None if wide else MASTER,
         )
+        image = Image.open(io.BytesIO(bytes(png))).convert("RGBA")
     except (ValueError, OSError, Image.DecompressionBombError) as err:
         raise _fail(path, f"resvg cannot render this SVG ({err})") from err
     master = Image.new("RGBA", (MASTER, MASTER), (0, 0, 0, 0))

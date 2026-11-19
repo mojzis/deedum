@@ -35,5 +35,13 @@ the SVG source is the one people actually have.
   the build machine has, so convert text to paths for a stable icon.
 - A favicon source inside the static folder is a build error. Keep it next to
   `deedum.toml` instead.
-- An SVG with an extreme aspect ratio renders a very large image for the probe pass;
-  we do not guard against that.
+- The SVG source is trusted, author-provided input. Only its root element is parsed
+  (xml.etree) to read the aspect, from `viewBox`, else numeric `width`/`height`. No
+  size at all is a `ConfigError`, and so is a longer/shorter side ratio above 16: the
+  short side would be under 32 px at 512, a useless icon, and an extreme ratio would
+  make resvg allocate a huge image. Otherwise there is one render at 512 px on the
+  longer side.
+- QA measured that resvg loads `<image>` hrefs with **absolute** filesystem paths, so an
+  SVG favicon can embed a local file that way. It does not load relative paths outside
+  the SVG's folder, `file://` hrefs or `http(s)` hrefs. Do not use an SVG favicon from
+  an untrusted source.

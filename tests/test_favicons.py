@@ -215,7 +215,38 @@ def test_decompression_bomb(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("text", ["<svg", ""])
 def test_malformed_svg(tmp_path, text):
-    assert "resvg cannot render" in fail_msgs(svg_site(tmp_path, text))
+    assert "not readable SVG" in fail_msgs(svg_site(tmp_path, text))
+
+
+def test_extreme_aspect_ratio_is_refused_without_rendering(tmp_path, monkeypatch):
+    def boom(**_):
+        msg = "must not render"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(resvg_py, "svg_to_bytes", boom)
+    text = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 100000">'
+        '<rect width="1" height="100000"/></svg>'
+    )
+    msg = fail_msgs(svg_site(tmp_path, text))
+    assert "aspect ratio 100000.0:1" in msg
+
+
+def test_svg_without_size_is_refused(tmp_path):
+    text = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="9" height="9"/></svg>'
+    assert "needs a viewBox or width/height" in fail_msgs(svg_site(tmp_path, text))
+
+
+def test_svg_size_from_width_and_height(tmp_path):
+    text = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="200px" height="100">'
+        '<rect width="200" height="100" fill="red"/></svg>'
+    )
+    site, out = svg_site(tmp_path, text), out_dir(tmp_path)
+    write_favicons(site, out)
+    big = px(out / "icon-512.png")
+    assert big.getpixel((256, 2))[3] == 0
+    assert big.getpixel((256, 256))[3] == 255
 
 
 def test_resvg_missing(tmp_path, monkeypatch):
