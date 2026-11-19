@@ -15,6 +15,9 @@ dependencies = [
     "typer-agentic>=0.1.10",
 ]
 
+[project.scripts]
+deedum = "deedum.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

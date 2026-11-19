@@ -17,9 +17,11 @@ is a client of the same API a hand-written build script uses.
 - **builder**: `Builder(site, out)`: output safety, render, copy static, record pages,
   `finish()` writes the extras.
 - **extras**: one module per output: sitemap, robots, favicons, feeds, llms, 404.
-- **app**: `deedum.App`, the hooks the convention build calls.
+- **app**: `deedum.App`, the hooks the convention build calls, and `build()`.
+- **foreign**: `write_extras`, the engine of `deedum extras <dir>`.
 - **check**: lints a built folder.
-- **cli**: typer router; each command calls one function above.
+- **cli**: typer router (`build`, `extras`, `guide`); each command calls one function
+  above. `deedum guide` prints the agent pages shipped in `deedum/guide/`.
 
 ## Flows
 

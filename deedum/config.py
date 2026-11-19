@@ -72,7 +72,7 @@ def _pyproject_table(data: dict[str, Any], path: Path) -> dict[str, Any] | None:
     return table
 
 
-def _has_pyproject_table(path: Path) -> bool:
+def has_pyproject_table(path: Path) -> bool:
     """Whether ``path`` exists and carries a usable ``[tool.deedum]`` table."""
     if not path.is_file():
         return False
@@ -95,7 +95,7 @@ def _locate(root: Path, config: Path | None) -> tuple[Path, dict[str, Any]]:
         return config, table
     toml_path, pyproject = root / DEEDUM_TOML, root / PYPROJECT
     if toml_path.is_file():
-        if _has_pyproject_table(pyproject):
+        if has_pyproject_table(pyproject):
             msg = f"both {toml_path} and [tool.deedum] in {pyproject} exist"
             raise ConfigError(msg, hint=f"keep one: delete {toml_path} or the table")
         return toml_path, _read_toml(toml_path)
