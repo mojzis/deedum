@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import datetime as dt
+import filecmp
 import hashlib
 import re
 import shutil
@@ -8,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from markupsafe import Markup
+from PIL import Image
 
 import deedum.builder as builder_mod
 from deedum import (
@@ -567,3 +570,219 @@ def test_render_rejects_empty_and_dot_segments(tmp_path, path):
     b = Builder(make_site(tmp_path), tmp_path / "out")
     with pytest.raises(ContentError, match=r"empty or '\.' segment"):
         b.render("page.html", path)
+
+
+SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8">'
+    '<rect width="8" height="8" fill="#cc3333"/></svg>'
+)
+NOW = dt.datetime(2026, 11, 18, 12, tzinfo=dt.UTC)
+FIXED_PUBLISHED = dt.date(2026, 3, 4)
+
+
+def post(slug: str, **kw) -> Page:
+    kw.setdefault("date", FIXED_PUBLISHED)
+    return Page(
+        url=f"blog/{slug}/",
+        output=f"blog/{slug}/index.html",
+        title=slug,
+        description="d",
+        body=Markup("<p>b</p>"),
+        source=f"# {slug}\n",
+        template="page.html",
+        collection="blog",
+        **kw,
+    )
+
+
+def rich_site(tmp_path: Path, **kw) -> Site:
+    kw.setdefault("favicon", "icon.svg")
+    kw.setdefault("feeds", ("blog",))
+    kw.setdefault("llms", True)
+    site = make_site(tmp_path, **kw)
+    put(site.root / "icon.svg", SVG)
+    return site
+
+
+def build_rich(site: Site, out: Path) -> BuildReport:
+    b = Builder(site, out, now=NOW)
+    b.render("page.html", "", title="Home")
+    b.render("page.html", "blog/hi/", page=post("hi"))
+    return b.finish()
+
+
+def test_finish_writes_new_extras_in_order(tmp_path):
+    out = tmp_path / "out"
+    report = build_rich(rich_site(tmp_path), out)
+    assert report.extras == [
+        "404.html",
+        "sitemap.xml",
+        "robots.txt",
+        ".nojekyll",
+        "favicon.ico",
+        "favicon.svg",
+        "apple-touch-icon.png",
+        "icon-192.png",
+        "icon-512.png",
+        "site.webmanifest",
+        "blog/feed.xml",
+        "llms.txt",
+        "llms-full.txt",
+        "blog/hi/index.md",
+    ]
+    assert Image.open(out / "icon-512.png").size == (512, 512)
+    assert "blog/hi/" in (out / "blog/feed.xml").read_text(encoding="utf-8")
+    assert (out / "blog/hi/index.md").read_text(encoding="utf-8") == "# hi\n"
+
+
+def test_sitemap_still_lists_only_html_pages(tmp_path):
+    out = tmp_path / "out"
+    build_rich(rich_site(tmp_path), out)
+    sitemap = (out / "sitemap.xml").read_text(encoding="utf-8")
+    assert "index.md" not in sitemap
+    assert "feed.xml" not in sitemap
+
+
+def test_png_source_head_links(tmp_path):
+    site = make_site(tmp_path, favicon="icon.png")
+    Image.new("RGB", (512, 512), "red").save(site.root / "icon.png")
+    b = Builder(site, tmp_path / "out")
+    html = b.render("page.html", "").read_text(encoding="utf-8")
+    assert b.finish().extras.count("favicon.svg") == 0
+    assert 'href="/b/site.webmanifest"' in html
+    assert "favicon.svg" not in html
+
+
+def test_nothing_new_without_config(tmp_path):
+    out = tmp_path / "out"
+    b = Builder(make_site(tmp_path), out)
+    b.render("page.html", ABOUT, page=about_page())
+    b.finish()
+    assert files(out) == [
+        ".nojekyll",
+        "404.html",
+        "about/index.html",
+        "robots.txt",
+        "sitemap.xml",
+    ]
+
+
+def test_llms_off_writes_no_llms_files(tmp_path):
+    out = tmp_path / "out"
+    build_rich(rich_site(tmp_path, llms=False), out)
+    assert not (out / "llms.txt").exists()
+    assert list(out.rglob("index.md")) == []
+
+
+def test_now_defaults_to_current_utc_time_once(tmp_path):
+    site = make_site(tmp_path, feeds=("blog",))
+    before = dt.datetime.now(dt.UTC).replace(microsecond=0)
+    b = Builder(site, tmp_path / "out")
+    b.finish()
+    feed = (tmp_path / "out/blog/feed.xml").read_text(encoding="utf-8")
+    stamp = re.search(r"<updated>([^<]+)</updated>", feed)
+    assert stamp is not None
+    written = dt.datetime.strptime(stamp.group(1), "%Y-%m-%dT%H:%M:%SZ").replace(
+        tzinfo=dt.UTC
+    )
+    assert before <= written <= dt.datetime.now(dt.UTC)
+
+
+@pytest.mark.parametrize(
+    ("static", "label"),
+    [
+        ("favicon.ico", "extra:favicon"),
+        ("favicon.svg", "extra:favicon"),
+        ("site.webmanifest", "extra:favicon"),
+        ("blog/feed.xml", "extra:feed:blog"),
+        ("llms.txt", "extra:llms"),
+        ("llms-full.txt", "extra:llms"),
+        ("blog/hi/index.md", "extra:llms"),
+    ],
+)
+def test_static_vs_new_extra_collision(tmp_path, static, label):
+    site = rich_site(tmp_path)
+    src = put(site.root / "static" / static)
+    out = tmp_path / "out"
+    b = Builder(site, out, now=NOW)
+    b.render("page.html", "blog/hi/", page=post("hi"))
+    b.copy_static()
+    before = files(out)
+    for _ in range(2):
+        with pytest.raises(ContentError) as ei:
+            b.finish()
+        assert str(src) in str(ei.value)
+        assert label in str(ei.value)
+    assert files(out) == before
+
+
+def test_favicon_collision_hints_at_source_outside_static(tmp_path):
+    site = rich_site(tmp_path, favicon="static/favicon.svg")
+    put(site.root / "static/favicon.svg", SVG)
+    b = Builder(site, tmp_path / "out")
+    b.copy_static()
+    with pytest.raises(ContentError) as ei:
+        b.finish()
+    assert "outside the static folder" in (ei.value.hint or "")
+
+
+def test_page_at_feed_path_collides(tmp_path):
+    site = rich_site(tmp_path)
+    b = Builder(site, tmp_path / "out", now=NOW)
+    b.render("page.html", "blog/feed.xml", title="x")
+    with pytest.raises(ContentError, match=r"blog/feed\.xml.*extra:feed:blog"):
+        b.finish()
+
+
+def test_page_at_sibling_path_collides(tmp_path):
+    b = Builder(rich_site(tmp_path), tmp_path / "out", now=NOW)
+    b.render("page.html", "blog/hi/", page=post("hi"))
+    b.render("page.html", "blog/hi/index.md", title="x")
+    with pytest.raises(ContentError, match=r"index\.md.*extra:llms"):
+        b.finish()
+
+
+def test_sibling_collision_only_for_pages_with_a_sibling(tmp_path):
+    site = rich_site(tmp_path)
+    put(site.root / "static/blog/other/index.md")
+    out = tmp_path / "out"
+    b = Builder(site, out, now=NOW)
+    b.render("page.html", "blog/hi/", page=post("hi"))
+    b.copy_static()
+    assert "blog/other/index.md" not in b.finish().extras
+
+
+def favicon_failure(b: Builder) -> str:
+    with pytest.raises(ConfigError, match="favicon") as ei:
+        b.finish()
+    return str(ei.value)
+
+
+@pytest.mark.parametrize(
+    "favicon",
+    ["missing.png", "small.png", "wide.png", "fake.png", "bad.svg"],
+)
+def test_bad_favicon_writes_nothing_and_retries_same_error(tmp_path, favicon):
+    site = rich_site(tmp_path, favicon=favicon)
+    Image.new("RGB", (256, 256)).save(site.root / "small.png")
+    Image.new("RGB", (600, 512)).save(site.root / "wide.png")
+    Image.new("RGB", (600, 600)).save(site.root / "fake.png", format="JPEG")
+    put(site.root / "bad.svg", "<svg")
+    out = tmp_path / "out"
+    b = Builder(site, out, now=NOW)
+    b.render("page.html", "blog/hi/", page=post("hi"))
+    first = favicon_failure(b)
+    assert favicon_failure(b) == first
+    assert favicon in first
+    assert files(out) == ["blog/hi/index.html"]
+
+
+def test_determinism_with_frozen_now(tmp_path):
+    first, second = tmp_path / "one", tmp_path / "two"
+    site = rich_site(tmp_path)
+    report = build_rich(site, first)
+    build_rich(site, second)
+    match, mismatch, errors = filecmp.cmpfiles(
+        first, second, report.extras, shallow=False
+    )
+    assert (sorted(match), mismatch, errors) == (sorted(report.extras), [], [])

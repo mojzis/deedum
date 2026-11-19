@@ -17,7 +17,18 @@ from typing import Any
 from markupsafe import Markup
 
 from deedum.errors import ConfigError, ContentError, DeedumError
-from deedum.extras import render_404, write_nojekyll, write_robots, write_sitemap
+from deedum.extras import favicons as favicons_mod
+from deedum.extras import feeds as feeds_mod
+from deedum.extras import llms as llms_mod
+from deedum.extras import (
+    render_404,
+    write_favicons,
+    write_feeds,
+    write_llms,
+    write_nojekyll,
+    write_robots,
+    write_sitemap,
+)
 from deedum.render import make_env, render_page
 from deedum.site import Page, Site
 
@@ -170,7 +181,8 @@ class Builder:
             _guard_tracked(self.out)
         self.out.mkdir(parents=True, exist_ok=True)
         _clear(self.out)
-        self._env = make_env(site, collections=collections, data=data, now=now)
+        self._now = now if now is not None else dt.datetime.now(dt.UTC)
+        self._env = make_env(site, collections=collections, data=data, now=self._now)
         self._origins: dict[str, str] = {}
         self._pages: list[Page] = []
         self._rendered = 0
@@ -269,21 +281,52 @@ class Builder:
         self._static += count
         return count
 
+    def _planned_extras(self) -> list[tuple[str, str]]:
+        """Every (output path, label) ``finish`` will write, in write order."""
+        site = self.site
+        planned = [(name, f"extra:{label}") for name, label in _EXTRAS.items()]
+        planned += [(n, "extra:favicon") for n in favicons_mod.output_names(site)]
+        for name in dict.fromkeys(site.feeds):
+            planned.append((feeds_mod.feed_path(name), f"extra:feed:{name}"))
+        if site.llms:
+            names = [
+                llms_mod.SHORT,
+                llms_mod.FULL,
+                *llms_mod.sibling_paths(self._pages),
+            ]
+            planned += [(n, "extra:llms") for n in names]
+        return planned
+
     def finish(self) -> BuildReport:
-        """Write the 404 page, sitemap, robots file and ``.nojekyll``."""
+        """Write the 404 page, sitemap, robots, ``.nojekyll``, icons, feeds, llms.
+
+        Collisions and the favicon source are checked before anything is
+        claimed or written, so a failure leaves the build untouched.
+        """
         self._check_open()
-        for name, label in _EXTRAS.items():
-            if name in self._origins:
-                first = self._origins[name]
-                msg = f"output {name!r} is written by both {first} and extra:{label}"
-                raise ContentError(msg)
-        for name, label in _EXTRAS.items():
-            self._claim(name, f"extra:{label}")
+        planned = self._planned_extras()
+        for name, label in planned:
+            key = posixpath.normpath(name)
+            if key in self._origins:
+                first = self._origins[key]
+                msg = f"output {key!r} is written by both {first} and {label}"
+                hint = (
+                    "keep the favicon source outside the static folder"
+                    if label == "extra:favicon"
+                    else None
+                )
+                raise ContentError(msg, hint=hint)
+        master = favicons_mod.load_master(self.site)
+        for name, label in planned:
+            self._claim(name, label)
         written = [
             render_404(self._env, self.site, self.out),
             write_sitemap(self.site, self._pages, self.out),
             write_robots(self.site, self.out),
             write_nojekyll(self.out),
+            *write_favicons(self.site, self.out, master),
+            *write_feeds(self.site, self._pages, self.out, self._now),
+            *write_llms(self.site, self._pages, self.out),
         ]
         self._finished = True
         return BuildReport(
