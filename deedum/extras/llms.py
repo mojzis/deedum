@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import posixpath
 import re
 from collections.abc import Iterable
 from pathlib import Path
@@ -23,9 +24,9 @@ def listed(pages: Iterable[Page]) -> list[Page]:
 
 def sibling_path(page: Page) -> str | None:
     """Site-relative ``index.md`` path for ``page``, or None when it gets none."""
-    if not page.source or not page.output.endswith(_SIBLING_OF):
+    if not page.source or posixpath.basename(page.output) != _SIBLING_OF:
         return None
-    return page.output.removesuffix(_SIBLING_OF) + "index.md"
+    return posixpath.join(posixpath.dirname(page.output), "index.md")
 
 
 def sibling_paths(pages: Iterable[Page]) -> list[str]:

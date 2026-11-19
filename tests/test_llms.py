@@ -142,6 +142,7 @@ def test_siblings_only_for_index_html_with_source(tmp_path):
         page("", "Home", source="home"),
         page("empty/", "E", source=""),
         page("x.html", "X", source="x"),
+        page("myindex.html", "My", source="m"),
         page("hid/", "Hid", source="h", noindex=True),
     ]
     out = run(tmp_path, pages)
