@@ -18,6 +18,7 @@ from deedum.foreign import _INDEX, _Robots, html_files
 _SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 _SRCSET_URL = re.compile(r"[\s,]*(\S+)")
 _LEFTOVER = ("{{", "{%")
+_FOREIGN = frozenset({"svg", "math"})
 _QUIET = frozenset({"code", "pre", "script", "style", "textarea"})
 _LINKS = {
     ("a", "href"),
@@ -105,15 +106,18 @@ class _Scan(_Robots):
         self.leftovers: list[tuple[int, str]] = []
         self._quiet = 0
         self._in_title = False
+        self._svg = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         super().handle_starttag(tag, attrs)
         line = self.getpos()[0]
         found = {k.lower(): (v or "") for k, v in attrs}
         self._quiet += tag in _QUIET
-        if tag == "title":
+        if tag in _FOREIGN:
+            self._svg += 1
+        if tag == "title" and not self._svg and self.title is None:
             self._in_title = True
-            self.title = self.title or ""
+            self.title = ""
         for name, value in found.items():
             if any(mark in value for mark in _LEFTOVER):
                 self.leftovers.append((line, f"in attribute {name!r} of <{tag}>"))
@@ -138,12 +142,16 @@ class _Scan(_Robots):
             self._quiet = max(0, self._quiet - 1)
         if tag == "title":
             self._in_title = False
+        if tag in _FOREIGN:
+            self._svg = max(0, self._svg - 1)
 
     def handle_data(self, data: str) -> None:
         if self._in_title:
             self.title = (self.title or "") + data
-        if not self._quiet and any(mark in data for mark in _LEFTOVER):
-            self.leftovers.append((self.getpos()[0], "in text"))
+        offsets = [i for i in map(data.find, _LEFTOVER) if i >= 0]
+        if offsets and not self._quiet:
+            line = self.getpos()[0] + data.count("\n", 0, min(offsets))
+            self.leftovers.append((line, "in text"))
 
 
 class _Resolver:
@@ -152,7 +160,7 @@ class _Resolver:
     def __init__(self, folder: Path, base_path: str) -> None:
         self.folder = folder
         self.base_path = base_path
-        self._exists: dict[str, bool] = {}
+        self._exists: dict[tuple[str, bool], bool] = {}
 
     def problem(self, page: str, url: str) -> str | None:
         """Why ``url`` (found on ``page``) is broken, or None when it is fine."""
@@ -162,6 +170,7 @@ class _Resolver:
         path = unquote(re.split(r"[?#]", url, maxsplit=1)[0])
         if not path:  # a bare query: the page itself
             return None
+        folder_only = path.endswith("/")
         if path.startswith("/"):
             if f"{path.rstrip('/')}/" == self.base_path:
                 path = self.base_path
@@ -172,21 +181,23 @@ class _Resolver:
             target = posixpath.normpath(posixpath.join(posixpath.dirname(page), path))
         if target == ".." or target.startswith("../"):
             return f"{url} climbs above the site root"
-        return None if self._found(target) else f"{url} is missing"
+        found = self._found(target, folder_only)
+        return None if found else f"{url} is missing"
 
-    def _found(self, target: str) -> bool:
-        if target not in self._exists:
-            self._exists[target] = self._lookup(target)
-        return self._exists[target]
+    def _found(self, target: str, folder_only: bool) -> bool:
+        key = (target, folder_only)
+        if key not in self._exists:
+            self._exists[key] = self._lookup(target, folder_only)
+        return self._exists[key]
 
-    def _lookup(self, target: str) -> bool:
+    def _lookup(self, target: str, folder_only: bool) -> bool:
         here = self.folder
         if target != ".":
             for part in target.split("/"):
                 here = here / part
                 if here.is_symlink():
                     return False
-        return here.is_file() or (here / _INDEX).is_file()
+        return (here / _INDEX).is_file() or (not folder_only and here.is_file())
 
 
 def _check_page(page: str, text: str, resolver: _Resolver) -> list[Finding]:

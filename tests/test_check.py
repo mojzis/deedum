@@ -294,3 +294,21 @@ def test_bad_folders_are_config_errors(tmp_path, kind):
 
 def test_finding_without_line_prints_no_line():
     assert str(Finding("a.html", 0, "warning", "x")) == "warning a.html: x"
+
+
+def test_leftover_line_counts_newlines_inside_the_text_node(out):
+    put(out, "index.html", page("\n<p>{{ x }}</p>\n<p>\n\n{{ y }}</p>"))
+    got = [f.line for f in check_folder(out).findings if "leftover" in f.detail]
+    assert got == [1 + 1, 1 + 4]
+
+
+def test_an_svg_title_does_not_stand_in_for_the_head_title(out):
+    head = HEAD.replace("<title>T</title>", "<title></title>")
+    put(out, "index.html", page("<svg><title>icon</title></svg>", head=head))
+    assert "error index.html: missing or empty <title>" in lines(out)
+
+
+def test_a_slash_link_to_a_file_is_missing(out):
+    put(out, "index.html", page('<a href="about.html/">x</a><a href="/">h</a>'))
+    put(out, "about.html", page())
+    assert lines(out) == ["error index.html: line 1: about.html/ is missing"]
