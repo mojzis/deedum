@@ -6,6 +6,7 @@ See decision 0012: existing target files are skipped unless ``overwrite``.
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
@@ -71,9 +72,11 @@ def _url(rel: str) -> str:
     return rel
 
 
-def _scan(site: Site, folder: Path) -> list[Page]:
-    """Indexable ``*.html`` pages below ``folder``; no links, dot-folders or noindex."""
-    pages = []
+def html_files(folder: Path) -> Iterator[tuple[str, Path]]:
+    """Lowercase ``*.html`` files below ``folder`` as ``(relative path, file)``.
+
+    Sorted, and never through a symlink or into a dot-folder.
+    """
     for here, dirs, files in os.walk(folder):
         base = Path(here)
         dirs[:] = sorted(
@@ -81,24 +84,26 @@ def _scan(site: Site, folder: Path) -> list[Page]:
         )
         for name in sorted(files):
             path = base / name
-            if not name.endswith(".html") or path.is_symlink() or not path.is_file():
-                continue
-            rel = path.relative_to(folder).as_posix()
-            if rel == _NOT_FOUND or _is_noindex(path):
-                continue
-            pages.append(
-                Page(
-                    url=_url(rel),
-                    output=rel,
-                    title="",
-                    description="",
-                    body=Markup(""),
-                    source="",
-                    template="",
-                    lang=site.lang,
-                )
-            )
-    return pages
+            if name.endswith(".html") and not path.is_symlink() and path.is_file():
+                yield path.relative_to(folder).as_posix(), path
+
+
+def _scan(site: Site, folder: Path) -> list[Page]:
+    """Indexable ``*.html`` pages below ``folder``; no links, dot-folders or noindex."""
+    return [
+        Page(
+            url=_url(rel),
+            output=rel,
+            title="",
+            description="",
+            body=Markup(""),
+            source="",
+            template="",
+            lang=site.lang,
+        )
+        for rel, path in html_files(folder)
+        if rel != _NOT_FOUND and not _is_noindex(path)
+    ]
 
 
 def _refuse(folder: Path, why: str) -> ConfigError:

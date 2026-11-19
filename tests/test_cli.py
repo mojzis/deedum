@@ -17,6 +17,7 @@ SVG = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
     '<rect width="64" height="64" fill="#cc3333"/></svg>'
 )
+BASE = "/demo/"
 TOML = 'title = "Demo"\nbase_url = "https://example.test"\nbase_path = "/demo/"\n'
 
 
@@ -349,3 +350,86 @@ def test_extras_rerun_hints_at_overwrite(site, foreign):
     assert result.exit_code == 0
     assert "hint:" in result.stderr
     assert "--overwrite" in result.stderr
+
+
+def test_check_after_build_is_clean_but_for_warnings(site):
+    assert run("build").exit_code == 0
+    result = run("check")
+    assert result.exit_code == 0
+    assert result.stdout.splitlines()[-1] == "checked 3 pages: 0 errors, 2 warnings"
+    assert "warning index.html: missing og:image" in result.stdout
+
+
+def test_check_strict_turns_warnings_into_exit_1(site):
+    run("build")
+    assert run("check", "--strict").exit_code == 1
+
+
+def test_check_without_a_build_is_exit_2(site):
+    result = run("check")
+    assert result.exit_code == 2
+    assert "cannot check" in result.stderr
+    assert "hint:" in result.stderr
+
+
+def test_check_dir_uses_the_config_base_path(site):
+    put(site / "content" / "index.md", "# Home\n\n[x](/demo/blog/one/) [y](/other/)\n")
+    run("build")
+    result = run("check", "_site")
+    assert result.exit_code == 1
+    assert "/other/ is outside base path /demo/" in result.stdout
+    assert "blog/one/ is" not in result.stdout
+
+
+def test_check_dir_without_config_defaults_to_the_root(tmp_path, monkeypatch):
+    put(tmp_path / "built" / "index.html", '<a href="/y/">y</a><a href="/">h</a>')
+    monkeypatch.chdir(tmp_path)
+    result = run("check", "built")
+    assert result.stdout.count("is missing") == 1
+
+
+def test_check_dir_without_config_takes_the_base_path_flag(tmp_path, monkeypatch):
+    put(tmp_path / "built" / "index.html", '<a href="/y/">y</a>')
+    monkeypatch.chdir(tmp_path)
+    flagged = run("check", "built", "--base-path", BASE)
+    assert f"is outside base path {BASE}" in flagged.stdout
+
+
+def test_check_dir_rejects_an_empty_base_path(tmp_path, monkeypatch):
+    (tmp_path / "built").mkdir()
+    monkeypatch.chdir(tmp_path)
+    assert run("check", "built", "--base-path", "").exit_code == 2
+
+
+def test_check_with_an_invalid_config_is_exit_2(site):
+    put(site / "deedum.toml", 'title = "x"\n')
+    run_ = run("check", "_site")
+    assert run_.exit_code == 2
+
+
+def test_check_bad_dir_is_exit_2(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = run("check", "nope")
+    assert (result.exit_code, "nope" in result.stderr) == (2, True)
+
+
+def test_build_check_prints_check_lines_after_build_lines(site):
+    put(site / "content" / "index.md", "# Home\n\n[x](../gone/)\n")
+    result = run("build", "--check")
+    lines = result.stdout.splitlines()
+    assert result.exit_code == 1
+    assert [lines[0], lines[1]] == ["pages 2", "static 1"]
+    assert lines[2].startswith("extras ")
+    assert "../gone/ climbs above the site root" in result.stdout
+
+
+def test_build_check_warnings_do_not_fail(site):
+    result = run("build", "--check")
+    assert result.exit_code == 0
+    assert "warning" in result.stdout
+
+
+def test_build_check_follows_out(site, tmp_path):
+    put(site / "content" / "index.md", "# Home\n\n[x](../gone/)\n")
+    result = run("build", "--check", "--out", str(tmp_path / "elsewhere"))
+    assert result.exit_code == 1

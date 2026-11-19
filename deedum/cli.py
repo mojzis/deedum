@@ -14,10 +14,11 @@ from typer_agentic import DEFAULT_AGENT_ENV_VARS, agent_errors
 
 from deedum import guide
 from deedum.app import build as build_site
-from deedum.config import load_site
+from deedum.check import CheckReport, check_folder
+from deedum.config import DEEDUM_TOML, PYPROJECT, has_pyproject_table, load_site
 from deedum.errors import ConfigError, DeedumError
 from deedum.foreign import write_extras
-from deedum.site import Site
+from deedum.site import Site, normalise_base_path
 
 AGENT = any(os.environ.get(v) for v in DEFAULT_AGENT_ENV_VARS)
 console = Console(no_color=AGENT, highlight=not AGENT, width=200 if AGENT else None)
@@ -85,12 +86,30 @@ def _site(config: Path | None, base_url: str | None, base_path: str | None) -> S
     )
 
 
+def _report(report: CheckReport, *, strict: bool) -> None:
+    """Print the findings and the summary; exit 1 on errors (and warnings, strict)."""
+    for finding in report.findings:
+        _say(str(finding))
+    _say(report.summary)
+    if report.errors or (strict and report.warnings):
+        raise typer.Exit(1)
+
+
+def _configured(config: Path | None) -> bool:
+    cwd = Path.cwd()
+    return (
+        config is not None
+        or (cwd / DEEDUM_TOML).is_file()
+        or has_pyproject_table(cwd / PYPROJECT)
+    )
+
+
 def _listing(label: str, names: list[str]) -> str:
     return f"{label} {len(names)}: {', '.join(names)}" if names else f"{label} 0"
 
 
 @app.command()
-def build(
+def build(  # noqa: PLR0913, PLR0917 -- every CLI option is an argument
     out: Annotated[
         Path | None,
         typer.Option("--out", help="Output folder; default is `out` in the config."),
@@ -104,6 +123,10 @@ def build(
             "--force-clear", help="Clear an output folder that holds tracked files."
         ),
     ] = False,
+    check_after: Annotated[
+        bool,
+        typer.Option("--check", help="Lint the output afterwards; errors exit 1."),
+    ] = False,
 ) -> None:
     """Build the site from folder conventions, using the configured App if any."""
     with _failures():
@@ -113,6 +136,36 @@ def build(
         _say(f"pages {report.pages}")
         _say(f"static {report.static}")
         _say(_listing("extras", report.extras))
+        if check_after:
+            where = site.root / site.out if target is None else target
+            _report(check_folder(where, site.base_path), strict=False)
+
+
+@app.command()
+def check(
+    folder: Annotated[
+        Path | None,
+        typer.Argument(help="A folder of built HTML; default is the configured out."),
+    ] = None,
+    config: Config = None,
+    base_url: BaseUrl = None,
+    base_path: BasePath = None,
+    strict: Annotated[
+        bool, typer.Option("--strict", help="Warnings exit 1 too.")
+    ] = False,
+) -> None:
+    """Lint built HTML: broken links, leftover template syntax, head metadata."""
+    with _failures():
+        if folder is not None and not _configured(config):
+            if base_path == "":
+                msg = "--base-path must not be empty"
+                raise ConfigError(msg)
+            found = normalise_base_path(base_path or "/")
+            report = check_folder(folder, found)
+        else:
+            site = _site(config, base_url, base_path)
+            report = check_folder(folder or site.root / site.out, site.base_path)
+        _report(report, strict=strict)
 
 
 @app.command()
