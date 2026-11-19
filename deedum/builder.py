@@ -34,6 +34,9 @@ from deedum.site import Page, Site
 
 _KEEP = frozenset({".git", "CNAME"})
 _MAX_LISTED = 5
+_FAVICON_HINT = (
+    "remove the static file, or keep the favicon source outside the static folder"
+)
 _GIT_TIMEOUT = 10
 _EXTRAS = {
     "404.html": "404",
@@ -41,6 +44,51 @@ _EXTRAS = {
     "robots.txt": "robots",
     ".nojekyll": "nojekyll",
 }
+
+
+@dataclass
+class _Claims:
+    """Output keys claimed so far. Two keys conflict when equal or nested."""
+
+    origins: dict[str, str] = field(default_factory=dict)
+    folders: dict[str, str] = field(default_factory=dict)
+
+    def conflict(self, key: str) -> tuple[str, str] | None:
+        """The (key, origin) already claimed that clashes with ``key``, if any."""
+        if key in self.origins:
+            return key, self.origins[key]
+        if key in self.folders:
+            below = self.folders[key]
+            return below, self.origins[below]
+        parts = key.split("/")
+        for i in range(1, len(parts)):
+            above = "/".join(parts[:i])
+            if above in self.origins:
+                return above, self.origins[above]
+        return None
+
+    def add(self, key: str, origin: str) -> None:
+        """Record ``key`` and register each of its parent folders."""
+        self.origins[key] = origin
+        parts = key.split("/")
+        for i in range(1, len(parts)):
+            self.folders.setdefault("/".join(parts[:i]), key)
+
+    def copy(self) -> _Claims:
+        """An independent copy, for trial claims."""
+        return _Claims(dict(self.origins), dict(self.folders))
+
+
+def _clash(key: str, origin: str, other: tuple[str, str]) -> ContentError:
+    other_key, other_origin = other
+    if other_key == key:
+        msg = f"output {key!r} is written by both {other_origin} and {origin}"
+    else:
+        msg = (
+            f"output {key!r} ({origin}) clashes with {other_key!r} "
+            f"({other_origin}): one is a file inside the other"
+        )
+    return ContentError(msg)
 
 
 def _home() -> Path:
@@ -183,7 +231,7 @@ class Builder:
         _clear(self.out)
         self._now = now if now is not None else dt.datetime.now(dt.UTC)
         self._env = make_env(site, collections=collections, data=data, now=self._now)
-        self._origins: dict[str, str] = {}
+        self._claims = _Claims()
         self._pages: list[Page] = []
         self._rendered = 0
         self._static = 0
@@ -195,14 +243,13 @@ class Builder:
         if ".git" in key.split("/"):
             msg = f"{origin} would write to a reserved path: {output!r}"
             raise ContentError(msg)
-        if key in self._origins:
-            msg = f"output {key!r} is written by both {self._origins[key]} and {origin}"
-            raise ContentError(msg)
+        if (other := self._claims.conflict(key)) is not None:
+            raise _clash(key, origin, other)
         target = (self.out / key).resolve()
         if not target.is_relative_to(self.out) or target == self.out:
             msg = f"{origin} would write outside the output folder: {output!r}"
             raise ContentError(msg)
-        self._origins[key] = origin
+        self._claims.add(key, origin)
         return target
 
     def _check_open(self) -> None:
@@ -305,17 +352,15 @@ class Builder:
         """
         self._check_open()
         planned = self._planned_extras()
+        trial = self._claims.copy()
         for name, label in planned:
             key = posixpath.normpath(name)
-            if key in self._origins:
-                first = self._origins[key]
-                msg = f"output {key!r} is written by both {first} and {label}"
-                hint = (
-                    "keep the favicon source outside the static folder"
-                    if label == "extra:favicon"
-                    else None
-                )
-                raise ContentError(msg, hint=hint)
+            if (other := trial.conflict(key)) is not None:
+                error = _clash(key, label, other)
+                if label == "extra:favicon":
+                    error.hint = _FAVICON_HINT
+                raise error
+            trial.add(key, label)
         master = favicons_mod.load_master(self.site)
         for name, label in planned:
             self._claim(name, label)

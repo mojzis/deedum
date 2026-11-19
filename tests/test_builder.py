@@ -726,6 +726,63 @@ def test_favicon_collision_hints_at_source_outside_static(tmp_path):
     assert "outside the static folder" in (ei.value.hint or "")
 
 
+def test_favicon_hint_is_neutral_when_static_file_is_not_the_source(tmp_path):
+    site = rich_site(tmp_path, favicon="icon.png")
+    put(site.root / "static/apple-touch-icon.png")
+    b = Builder(site, tmp_path / "out")
+    b.copy_static()
+    with pytest.raises(ContentError) as ei:
+        b.finish()
+    assert (ei.value.hint or "").startswith("remove the static file")
+
+
+def failed_twice(b: Builder, *names: str) -> list[str]:
+    """Run finish() twice, expect the same ContentError naming ``names``."""
+    messages = []
+    for _ in range(2):
+        with pytest.raises(ContentError) as ei:
+            b.finish()
+        assert all(n in str(ei.value) for n in names)
+        messages.append(str(ei.value))
+    return messages
+
+
+def test_static_file_vs_feed_folder_checked_before_any_write(tmp_path):
+    site = make_site(tmp_path, feeds=("news",))
+    put(site.root / "static/news")
+    out = tmp_path / "out"
+    b = Builder(site, out, now=NOW)
+    b.copy_static()
+    first, second = failed_twice(b, "'news'", "extra:feed:news")
+    assert first == second
+    assert files(out) == ["news"]
+
+
+def test_feed_named_like_an_extra_is_checked_before_any_write(tmp_path):
+    site = make_site(tmp_path, feeds=("404.html",))
+    out = tmp_path / "out"
+    b = Builder(site, out, now=NOW)
+    first, second = failed_twice(b, "404.html/feed.xml", "extra:404")
+    assert first == second
+    assert files(out) == []
+
+
+def test_page_vs_page_prefix_collision(tmp_path):
+    b = Builder(make_site(tmp_path), tmp_path / "out")
+    b.render("page.html", "a")
+    with pytest.raises(ContentError, match=r"'a/index.html'.*'a'"):
+        b.render("page.html", "a/")
+
+
+def test_static_file_vs_page_folder_collision(tmp_path):
+    site = make_site(tmp_path)
+    put(site.root / "static/blog")
+    b = Builder(site, tmp_path / "out")
+    b.render("page.html", "blog/hello/")
+    with pytest.raises(ContentError, match="blog"):
+        b.copy_static()
+
+
 def test_page_at_feed_path_collides(tmp_path):
     site = rich_site(tmp_path)
     b = Builder(site, tmp_path / "out", now=NOW)
