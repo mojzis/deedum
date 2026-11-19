@@ -17,6 +17,8 @@ from deedum.errors import ConfigError
 
 _SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 _TWITTER = re.compile(r"^@?\w+$")
+_COLOR = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$")
+_FEED_NAME = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9._-]*$")
 
 
 def normalise_base_url(value: str, source: str) -> str:
@@ -110,6 +112,7 @@ class Site:
         set_(self, "base_path", normalise_base_path(self.base_path))
         set_(self, "twitter", normalise_twitter(self.twitter, "Site(twitter)"))
         set_(self, "feeds", tuple(self.feeds))
+        _check_feeds_and_color(self)
         set_(self, "robots_extra_sitemaps", tuple(self.robots_extra_sitemaps))
 
     def _root_relative(self, path: str) -> str:
@@ -139,6 +142,20 @@ class Site:
         if _is_external(path):
             return path
         return self.base_url + self._root_relative(path)
+
+
+def _check_feeds_and_color(site: Site) -> None:
+    """Feed names become folder names and the colour lands in a manifest."""
+    for name in site.feeds:
+        if not isinstance(name, str) or not _FEED_NAME.match(name):
+            msg = (
+                f"Site(feeds) has the invalid name {name!r}: use one folder name "
+                "of letters, digits, '-', '_' and '.', not starting with '.'"
+            )
+            raise ConfigError(msg)
+    if not isinstance(site.theme_color, str) or not _COLOR.match(site.theme_color):
+        msg = f"Site(theme_color) {site.theme_color!r} must be #rgb or #rrggbb"
+        raise ConfigError(msg, hint="example: theme_color = '#1a73e8'")
 
 
 def _is_external(path: str) -> bool:

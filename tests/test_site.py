@@ -131,3 +131,30 @@ def test_invalid_twitter():
 def test_non_string_fields_raise_config_error(field):
     with pytest.raises(ConfigError, match=rf"Site\({field}\)"):
         make(**{field: 1})
+
+
+@pytest.mark.parametrize("bad", ["../x", "a/b", ".git", "", ".hidden", "a b", "a\\b"])
+def test_unsafe_feed_names_rejected(bad):
+    with pytest.raises(ConfigError, match="feeds"):
+        make(feeds=("blog", bad))
+
+
+def test_non_string_feed_name_rejected():
+    with pytest.raises(ConfigError, match="feeds"):
+        make(feeds=(1,))
+
+
+@pytest.mark.parametrize("name", ["blog", "_n", "a.b-c", "9"])
+def test_safe_feed_names_accepted(name):
+    assert make(feeds=(name,)).feeds == (name,)
+
+
+@pytest.mark.parametrize("bad", ["white", "#12345", "#ggg", "ffffff", "#ffff", 5])
+def test_invalid_theme_color(bad):
+    with pytest.raises(ConfigError, match="theme_color"):
+        make(theme_color=bad)
+
+
+@pytest.mark.parametrize("good", ["#fff", "#FFFFFF", "#1a73e8"])
+def test_valid_theme_color(good):
+    assert make(theme_color=good).theme_color == good
