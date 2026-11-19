@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import importlib
 import importlib.util
 import sys
 from collections.abc import Callable
@@ -22,6 +23,7 @@ _BUILTIN_GLOBALS = frozenset(
         "image_size", "head_extra",
     }
 )  # fmt: skip
+_META_RESERVED = ("url", "output", "meta", "source_path")
 _RENDER_ARGS = frozenset({"page", "template", "path"})
 _PAGE_FIELDS = (
     "date", "updated", "collection", "image", "noindex", "lang", "alternates",
@@ -75,6 +77,10 @@ class App:
         ``body`` is HTML. Keys naming a Page field (``date``, ``noindex``, ...)
         set that field; the rest become frontmatter-style ``meta``.
         """
+        for key in _META_RESERVED:
+            if key in meta:
+                msg = f"page {path!r}: {key!r} is reserved: deedum derives it"
+                raise DeedumError(msg, hint="the URL comes from the path argument")
         fields = {k: meta.pop(k) for k in _PAGE_FIELDS if k in meta}
         fields.setdefault("lang", self.site.lang)
         return Page(
@@ -117,6 +123,12 @@ def _execute(site: Site, module: str, file: Path) -> Any:
         raise _fail(site, f"cannot load {str(file)!r}")
     mod = importlib.util.module_from_spec(spec)
     saved_path = list(sys.path)
+    before = set(sys.modules)
+    root = site.root.resolve()
+    importlib.invalidate_caches()
+    # A .pyc keyed on mtime+size would serve stale code to a same-size quick edit.
+    no_bytecode = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
     sys.path.insert(0, str(site.root))
     sys.modules[name] = mod
     try:
@@ -124,9 +136,19 @@ def _execute(site: Site, module: str, file: Path) -> Any:
     except (Exception, SystemExit) as err:
         raise _fail(site, f"importing {str(file)!r} failed: {_describe(err)}") from err
     finally:
+        sys.dont_write_bytecode = no_bytecode
+        _forget(before, root)
         sys.modules.pop(name, None)
         sys.path[:] = saved_path
     return mod
+
+
+def _forget(before: set[str], root: Path) -> None:
+    """Drop modules the app imported from the site root, so a rebuild re-reads them."""
+    for key in set(sys.modules) - before:
+        file = getattr(sys.modules.get(key), "__file__", None)
+        if file and Path(file).resolve().is_relative_to(root):
+            sys.modules.pop(key, None)
 
 
 def _describe(err: BaseException) -> str:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import colorsys
 import datetime as dt
 import hashlib
 import site as stdlib_site
@@ -331,3 +332,50 @@ def test_unloadable_spec_is_an_app_error(tmp_path, monkeypatch):
     )
     with pytest.raises(ConfigError, match="cannot load"):
         load_app(site)
+
+
+HELPER_APP = """
+import deedum
+from helpers import VALUE
+
+
+class S(deedum.App):
+    def load_pages(self):
+        return [self.page("", title="H", body=VALUE)]
+"""
+
+
+def test_rebuild_sees_edited_sibling_and_forgets_it(tmp_path):
+    site = app_site(tmp_path, HELPER_APP, "site:S")
+    helpers = put(site.root / "helpers.py", "VALUE = 'ONE'\n")
+    path_before = list(sys.path)
+    build(site, tmp_path / "out1")
+    assert "helpers" not in sys.modules
+    helpers.write_text("VALUE = 'TWO'\n", encoding="utf-8")
+    build(site, tmp_path / "out2")
+    assert "ONE" in (tmp_path / "out1" / "index.html").read_text(encoding="utf-8")
+    assert "TWO" in (tmp_path / "out2" / "index.html").read_text(encoding="utf-8")
+    assert sys.path == path_before
+
+
+def test_sibling_shadowing_stdlib_does_not_stay(tmp_path):
+    site = app_site(
+        tmp_path,
+        "import deedum, colorsys\nclass S(deedum.App):\n    pass\n",
+        "myapp:S",
+    )
+    put(
+        site.root / "myapp.py",
+        "import deedum, colorsys\nclass S(deedum.App):\n    pass\n",
+    )
+    put(site.root / "colorsys.py", "MINE = 1\n")
+    load_app(site)
+    assert sys.modules["colorsys"] is colorsys
+    assert not hasattr(sys.modules.get("colorsys"), "MINE")
+
+
+@pytest.mark.parametrize("key", ["url", "output"])
+def test_page_helper_refuses_reserved_kwargs(tmp_path, key):
+    app = App(make_site(tmp_path))
+    with pytest.raises(DeedumError, match=key):
+        app.page("y/", title="Y", **{key: "z"})
