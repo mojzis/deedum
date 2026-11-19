@@ -41,14 +41,7 @@
 {% endif %}
 {% endblock %}
 {% block links %}
-{% if site.favicon %}
-<link rel="icon" href="{{ url('favicon.ico') }}" sizes="32x32">
-{% if site.favicon.lower().endswith('.svg') %}
-<link rel="icon" href="{{ url('favicon.svg') }}" type="image/svg+xml">
-{% endif %}
-<link rel="apple-touch-icon" href="{{ url('apple-touch-icon.png') }}">
-<link rel="manifest" href="{{ url('site.webmanifest') }}">
-{% endif %}
+{% include "deedum/favicon_links.html" %}
 {% if page.url == "" %}
 {% set feed_names = site.feeds | unique | list %}
 {% elif page.collection in site.feeds %}

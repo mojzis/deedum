@@ -7,6 +7,7 @@ import json
 import re
 import shutil
 import xml.etree.ElementTree as ET
+from collections.abc import Collection
 from pathlib import Path
 
 from PIL import Image
@@ -135,22 +136,34 @@ def _png_bytes(image: Image.Image) -> bytes:
 
 
 def write_favicons(
-    site: Site, out: Path, master: Image.Image | None = None
+    site: Site,
+    out: Path,
+    master: Image.Image | None = None,
+    *,
+    skip: Collection[str] = (),
 ) -> list[Path]:
-    """Write the favicon set and manifest into ``out``; return the paths."""
+    """Write the favicon set and manifest into ``out``; return the paths.
+
+    Names in ``skip`` are left alone and left out of the result.
+    """
     master = master or load_master(site)
     if master is None:
         return []
     written = []
-    master.save(out / ICO, format="ICO", sizes=[(s, s) for s in ICO_SIZES])
-    written.append(out / ICO)
-    if _is_svg(site.favicon):
+    if ICO not in skip:
+        master.save(out / ICO, format="ICO", sizes=[(s, s) for s in ICO_SIZES])
+        written.append(out / ICO)
+    if _is_svg(site.favicon) and SVG not in skip:
         shutil.copyfile(source_path(site), out / SVG)
         written.append(out / SVG)
     for name, size in _PNG_SIZES.items():
+        if name in skip:
+            continue
         small = master.resize((size, size), Image.Resampling.LANCZOS)
         (out / name).write_bytes(_png_bytes(small))
         written.append(out / name)
+    if MANIFEST in skip:
+        return written
     manifest = {
         "name": site.title,
         "short_name": site.title,

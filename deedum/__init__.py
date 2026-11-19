@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from deedum.app import App
 from deedum.builder import Builder, BuildReport
 from deedum.config import load_site
 from deedum.content import build_collections, load_data, load_pages
@@ -10,6 +11,7 @@ from deedum.render import head_tags, make_env, render_page
 from deedum.site import Page, Site
 
 __all__ = [
+    "App",
     "BuildReport",
     "Builder",
     "ConfigError",

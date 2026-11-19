@@ -181,7 +181,7 @@ def _clear(out: Path) -> None:
             shutil.rmtree(entry)
 
 
-def _output_for(path: str) -> str:
+def output_for(path: str) -> str:
     """Site-relative URL path -> output file path, or ContentError."""
     if "\0" in path or "\\" in path or path.startswith("/"):
         msg = f"invalid page path {path!r}: must be relative, without NUL or backslash"
@@ -230,7 +230,7 @@ class Builder:
         self.out.mkdir(parents=True, exist_ok=True)
         _clear(self.out)
         self._now = now if now is not None else dt.datetime.now(dt.UTC)
-        self._env = make_env(site, collections=collections, data=data, now=self._now)
+        self.env = make_env(site, collections=collections, data=data, now=self._now)
         self._claims = _Claims()
         self._pages: list[Page] = []
         self._rendered = 0
@@ -267,7 +267,7 @@ class Builder:
     ) -> Path:
         """Render ``template`` to the site-relative URL ``path``; return the file."""
         self._check_open()
-        output = _output_for(path)
+        output = output_for(path)
         if output == "CNAME":
             msg = "render would overwrite the reserved CNAME file"
             raise ContentError(msg)
@@ -286,7 +286,7 @@ class Builder:
             msg = f"page {page.url!r} has output {page.output!r}, not {output!r}"
             raise ContentError(msg)
         target = self._claim(output, f"page {page.url!r} ({template})")
-        html = render_page(self._env, page, template=template, **context)
+        html = render_page(self.env, page, template=template, **context)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(html, encoding="utf-8")
         self._rendered += 1
@@ -365,7 +365,7 @@ class Builder:
         for name, label in planned:
             self._claim(name, label)
         written = [
-            render_404(self._env, self.site, self.out),
+            render_404(self.env, self.site, self.out),
             write_sitemap(self.site, self._pages, self.out),
             write_robots(self.site, self.out),
             write_nojekyll(self.out),

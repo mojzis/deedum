@@ -16,6 +16,7 @@ from deedum.site import Page, Site, _is_external, _split_suffix
 
 _BUILTIN_DIR = Path(__file__).parent / "templates"
 _HEAD = "deedum/head.html"
+_FAVICON_LINKS = "deedum/favicon_links.html"
 
 
 def _builtins() -> jinja2.FileSystemLoader:
@@ -157,3 +158,19 @@ def head_tags(site: Site, page: Page) -> Markup:
     env = _build_env(site, _builtins(), None, None, None)
     html = render_page(env, page, template=_HEAD)
     return Markup(html)  # noqa: S704 -- output of an autoescaped template
+
+
+def favicon_links(site: Site) -> str:
+    """The favicon ``<link>`` tags of the head partial, one per line; may be empty."""
+    env = _build_env(site, _builtins(), None, None, None)
+    page = Page(
+        url="",
+        output="index.html",
+        title=site.title,
+        description="",
+        body=Markup(""),
+        source="",
+        template="page.html",
+        lang=site.lang,
+    )
+    return render_page(env, page, template=_FAVICON_LINKS).strip()
