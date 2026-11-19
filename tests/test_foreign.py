@@ -358,3 +358,18 @@ def test_links_match_the_head_partial_for_png(tmp_path):
     assert links == head_icon_lines(site)
     assert "favicon.svg" not in links
     assert 'rel="manifest" href="/demo/site.webmanifest"' in links
+
+
+def test_relative_links_extras_print_root_relative_favicon_links(tmp_path):
+    site = make_site(tmp_path, "icon.svg", relative_links=True)
+    put(site.root / "icon.svg", SVG)
+    report = write_extras(site, folder(tmp_path))
+    assert 'href="/demo/favicon.ico"' in report.links
+    assert 'href="favicon.ico"' not in report.links
+
+
+def test_upper_case_html_is_not_scanned(tmp_path):
+    root = folder(tmp_path)
+    put(root / "PAGE.HTML")
+    write_extras(make_site(tmp_path), root)
+    assert not any("PAGE" in loc for loc in locs(root / "sitemap.xml"))

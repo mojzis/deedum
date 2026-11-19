@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -162,6 +163,9 @@ def head_tags(site: Site, page: Page) -> Markup:
 
 def favicon_links(site: Site) -> str:
     """The favicon ``<link>`` tags of the head partial, one per line; may be empty."""
+    # Root-relative on purpose: the tags are printed for the user to paste into
+    # pages at any depth, so a page-relative href would be wrong.
+    site = replace(site, relative_links=False)
     env = _build_env(site, _builtins(), None, None, None)
     page = Page(
         url="",
