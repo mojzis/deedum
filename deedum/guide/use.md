@@ -15,6 +15,20 @@ Configured here. Pick the way in that fits, take the first that applies.
    `--overwrite` to replace them (after content changes, rerun with `--overwrite`).
    It never edits your HTML.
 
+5. **Day to day:**
+   - `uv run deedum new COLLECTION "Title"` creates `content/COLLECTION/<slug>.md`
+     with the title and today's date. It refuses to overwrite. A template at
+     `templates/new/COLLECTION.md` replaces the default body; it gets `title`, `date`,
+     `slug` and `collection`, and should write the title as `{{ title | tojson }}`.
+   - `uv run deedum serve [--port 8000]` builds into temp folders, serves
+     `http://localhost:PORT` and rebuilds on every change. A broken edit prints
+     `error:` and the last good build keeps being served. Ctrl-C stops it.
+   - `uv run deedum check [DIR]` lints built HTML: broken links, links outside the
+     base path, leftover `{{`/`{%`, a missing title or canonical are errors (exit 1);
+     a missing description or og:image are warnings (exit 0, `--strict` makes them
+     exit 1). `deedum build --check` runs it after the build.
+   - `uv run deedum init` scaffolds a new site, including a GitHub Pages workflow.
+
 Reading the result of `build`: three lines on stdout, `pages N`, `static N`,
 `extras N: paths`. Errors go to stderr as `error: ...` with an optional `hint: ...`.
 
@@ -26,6 +40,8 @@ Do not:
 - retry with `--force-clear` to get past a tracked-files refusal unless the output
   folder is meant to be committed.
 - delete `_site/` by hand to "fix" a build: the build clears it itself.
+- pass `--strict` to make `check` pass: fix the warning (add a description or an
+  `image`) instead.
 - pass `--overwrite` to `extras` without reading what it lists as skipped.
 
 Exit codes, every config key and the template names: `uv run deedum guide tune`.

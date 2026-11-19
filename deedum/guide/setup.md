@@ -1,4 +1,6 @@
-Not wired in here yet. Three steps, in order.
+Not wired in here yet. Quickest: `uv add deedum`, then `uv run deedum init`. It writes
+the config, a home page, a template override example, an empty `static/` and a GitHub
+Pages workflow, and never overwrites anything. Or do it by hand, three steps in order.
 
 1. Add the dependency: `uv add deedum`.
 2. Create `deedum.toml` next to your content, with the two keys that matter:
@@ -18,6 +20,10 @@ Build:
 ```
 uv run deedum build
 ```
+
+See it live with `uv run deedum serve` (rebuilds on every save). Lint the result with
+`uv run deedum check`, or build and lint in one go with `uv run deedum build --check`.
+Add a post with `uv run deedum new blog "My first post"`.
 
 Done looks like exit 0, stdout of exactly three lines (`pages N`, `static N`,
 `extras N: ...`) and the site in `_site/`. Nothing on stderr.

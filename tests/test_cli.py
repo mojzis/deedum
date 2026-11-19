@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import socket
 import subprocess
 from pathlib import Path
 
@@ -513,3 +514,78 @@ def test_new_with_config_elsewhere(site, tmp_path, monkeypatch):
     result = run("new", "blog", "T", "--config", str(site / "deedum.toml"))
     assert result.exit_code == 0
     assert (site / "content" / "blog" / "t.md").is_file()
+
+
+def fake_server(seen: dict):
+    def run_server(load, *, port, say, complain):
+        seen.update(port=port, site=load("http://localhost:9"))
+        say("serving")
+        complain("hint: x")
+
+    return run_server
+
+
+def test_serve_passes_port_and_a_loader_with_the_base_url_override(site, monkeypatch):
+    seen: dict = {}
+    monkeypatch.setattr(cli, "run_server", fake_server(seen))
+    result = run("serve", "--port", "0")
+    assert (result.exit_code, result.stdout, result.stderr) == (
+        0,
+        "serving\n",
+        "hint: x\n",
+    )
+    assert seen["port"] == 0
+    assert seen["site"].base_url == "http://localhost:9"
+    assert seen["site"].base_path == BASE
+
+
+def test_serve_defaults_to_port_8000(site, monkeypatch):
+    seen: dict = {}
+    monkeypatch.setattr(cli, "run_server", fake_server(seen))
+    run("serve")
+    assert seen["port"] == 8000
+
+
+def test_serve_with_config_elsewhere(site, tmp_path, monkeypatch):
+    seen: dict = {}
+    monkeypatch.setattr(cli, "run_server", fake_server(seen))
+    monkeypatch.chdir(tmp_path)
+    run("serve", "--config", str(site / "deedum.toml"))
+    assert seen["site"].root == site
+
+
+@pytest.mark.parametrize("port", ["-1", "65536", "x"])
+def test_serve_rejects_a_bad_port(site, port):
+    assert run("serve", "--port", port).exit_code == 2
+
+
+def test_serve_interrupt_is_exit_130(site, monkeypatch):
+    def interrupted(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "run_server", interrupted)
+    assert run("serve").exit_code == 130
+
+
+def test_serve_without_a_config_is_exit_2(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert run("serve", "--port", "0").exit_code == 2
+
+
+def test_serve_port_in_use_is_exit_1_with_a_hint(site):
+    with socket.socket() as holder:
+        holder.bind(("127.0.0.1", 0))
+        holder.listen()
+        port = holder.getsockname()[1]
+        result = run("serve", "--port", str(port))
+    assert result.exit_code == 1
+    assert f"error: cannot listen on port {port}" in result.stderr
+    assert "hint: pass --port" in result.stderr
+
+
+@pytest.mark.parametrize("command", ["check", "init", "new", "serve"])
+def test_every_new_command_is_in_the_guide_pages_and_help(command, tmp_path):
+    pages = "\n".join(render(topic, tmp_path) for topic in Topic)
+    assert f"deedum {command}" in pages
+    assert command in run("--help").stdout
+    assert run(command, "-h").exit_code == 0

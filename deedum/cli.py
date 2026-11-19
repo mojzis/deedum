@@ -19,6 +19,7 @@ from deedum.config import DEEDUM_TOML, PYPROJECT, has_pyproject_table, load_site
 from deedum.errors import ConfigError, DeedumError
 from deedum.foreign import write_extras
 from deedum.scaffold import init_site, new_entry
+from deedum.serve import serve as run_server
 from deedum.site import Site, normalise_base_path
 
 AGENT = any(os.environ.get(v) for v in DEFAULT_AGENT_ENV_VARS)
@@ -224,6 +225,26 @@ def new(
         site = _site(config, None, None)
         path = new_entry(site, collection, title, slug=slug)
         _say(f"written {os.path.relpath(path)}")
+
+
+@app.command()
+def serve(
+    port: Annotated[
+        int,
+        typer.Option(
+            "--port", min=0, max=65535, help="Port on 127.0.0.1; 0 picks one."
+        ),
+    ] = 8000,
+    config: Config = None,
+) -> None:
+    """Build, serve on localhost and rebuild on every change. Ctrl-C stops it."""
+    with _failures():
+        run_server(
+            lambda base_url: _site(config, base_url, None),
+            port=port,
+            say=_say,
+            complain=_complain,
+        )
 
 
 @app.command(name="guide")

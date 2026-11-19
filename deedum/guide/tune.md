@@ -28,11 +28,34 @@ Precedence: flag, then `DEEDUM_BASE_URL` / `DEEDUM_BASE_PATH`, then the file.
 | `app` | `module:Class` of a `deedum.App` subclass |
 | `allow_tracked_out` | let the build clear an output folder holding tracked files |
 
+## Commands
+
+| command | does |
+| --- | --- |
+| `deedum build` | build the site; `--check` lints the output afterwards |
+| `deedum check [DIR]` | lint built HTML; `--strict` fails on warnings too |
+| `deedum extras DIR` | add sitemap, robots, icons to a folder something else built |
+| `deedum init [DIR]` | scaffold config, home page, template override, Pages workflow |
+| `deedum new COLLECTION TITLE` | create a content entry; `--slug` overrides the file name |
+| `deedum serve` | build to temp folders, serve on 127.0.0.1, rebuild on change |
+| `deedum guide` | print these pages |
+
+`check` levels: errors are a broken link or asset, a link outside the base path,
+leftover `{{` or `{%`, a missing or empty `<title>`, a missing canonical. Warnings are
+a missing meta description and a missing `og:image`. Pages with a robots noindex meta
+get no metadata findings. Own-origin absolute URLs are not checked.
+
+`serve` binds `127.0.0.1` only, builds with `base_url = http://localhost:PORT`, never
+touches the configured `out` folder, and ignores changes under dot-folders,
+`__pycache__`, `node_modules`, `out` and `*~` files.
+
 ## Exit codes
 
 - 0: ok
-- 1: content, render or app-hook failure
-- 2: config error: bad config, bad `app`, a refused output or extras folder
+- 1: content, render or app-hook failure; `check` found errors; `new` target exists;
+  `serve` port in use
+- 2: config error: bad config, bad `app`, a refused output, extras or check folder,
+  a bad collection or slug for `new`
 - 130: interrupted
 
 stderr carries `error: <what>` and `hint: <what to do>`.
@@ -52,6 +75,8 @@ the `builtin/` prefix.
 - Loading `app` runs that Python file: it is trusted code.
 - `build` refuses `.git`, symlinks, the home folder, the site root and source folders.
 - `extras` refuses a symlinked or `.git` folder and any symlinked target.
+- `init` and `new` never overwrite, delete or write through a symlink.
+- `check` never follows symlinks.
 - `extras` scans only lowercase `*.html`; `.HTML` files are not listed in the sitemap.
 
 next: `uv run deedum build`
