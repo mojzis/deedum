@@ -28,3 +28,4 @@ site visible while a build is running or after it fails.
 - A hard kill (SIGKILL, power loss) can leave `deedum-serve-*` folders in the temp
   dir; Ctrl-C (SIGINT) cleans up, SIGTERM does not.
 - Output is identical to a normal build apart from `base_url`.
+- Any file written inside the site root (e.g. serve's own output redirected into the site folder) triggers a rebuild and can loop; keep logs outside the root.

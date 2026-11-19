@@ -77,6 +77,8 @@ the `builtin/` prefix.
 - `extras` refuses a symlinked or `.git` folder and any symlinked target.
 - `init` and `new` never overwrite, delete or write through a symlink.
 - `check` never follows symlinks.
+- `check DIR` with no config uses `--base-path` or `/` and ignores `DEEDUM_BASE_PATH`; with a config, env and flags apply as in `build`.
+- `check`'s page count includes `404.html`; it is linted for links but exempt from metadata rules.
 - `extras` scans only lowercase `*.html`; `.HTML` files are not listed in the sitemap.
 
 next: `uv run deedum build`

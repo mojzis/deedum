@@ -24,6 +24,8 @@ nothing gets ignored.
   pages, i.e. pages without a robots noindex meta. Link and leftover-syntax rules
   apply to every page, the 404 page included.
 - Absolute URLs that point at the site's own origin are not checked.
+- `check DIR` with no config uses `--base-path` or `/` and ignores `DEEDUM_BASE_PATH`; with a config, env and flags apply as in `build`.
+- The page count includes `404.html`: it is linted for links but exempt from metadata rules.
 
 ## Consequences
 

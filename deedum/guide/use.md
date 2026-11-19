@@ -23,6 +23,8 @@ Configured here. Pick the way in that fits, take the first that applies.
    - `uv run deedum serve [--port 8000]` builds into temp folders, serves
      `http://localhost:PORT` and rebuilds on every change. A broken edit prints
      `error:` and the last good build keeps being served. Ctrl-C stops it.
+   - Any file written inside the site root (e.g. serve's own output redirected
+     into the site folder) triggers a rebuild and can loop. Keep logs outside the root.
    - `uv run deedum check [DIR]` lints built HTML: broken links, links outside the
      base path, leftover `{{`/`{%`, a missing title or canonical are errors (exit 1);
      a missing description or og:image are warnings (exit 0, `--strict` makes them
