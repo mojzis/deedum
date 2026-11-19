@@ -29,6 +29,9 @@ is a client of the same API a hand-written build script uses.
   each command calls one function above. `deedum guide` prints the agent pages shipped
   in `deedum/guide/`.
 
+- **examples/demo**: a small site using every feature; built by the tests with a
+  frozen `now` and the bar for `check --strict` (decision 0016).
+
 ## Flows
 
 `deedum build`: config → `App.load_pages()` → `Builder.render` per page → copy static →

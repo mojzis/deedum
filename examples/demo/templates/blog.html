@@ -1,0 +1,19 @@
+{% extends "page.html" %}
+{% block more %}
+{% if page.url == "blog/" %}
+<ul>
+{% for post in collections.blog %}
+<li><a href="{{ url(post.url) }}">{{ post.title }}</a>{% if post.date %} <span class="meta">{{ post.date | human_date }}</span>{% endif %}</li>
+{% endfor %}
+</ul>
+<p>{{ collections.blog | length | plural("post") }}.</p>
+{% else %}
+{% if page.date %}<p class="meta">Published {{ page.date | human_date }}{% if page.updated %}, updated {{ page.updated | human_date }}{% endif %}</p>{% endif %}
+<h2>More posts</h2>
+<ul>
+{% for post in related %}
+<li><a href="{{ url(post.url) }}">{{ post.title }}</a></li>
+{% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

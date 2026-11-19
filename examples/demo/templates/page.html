@@ -1,0 +1,18 @@
+{% extends "deedum/base.html" %}
+{% block head %}
+<link rel="stylesheet" href="{{ url('style.css') }}">
+{% endblock %}
+{% block nav %}
+<nav>
+{% for label, path in nav %}
+<a href="{{ url(path) }}">{{ label }}</a>
+{% endfor %}
+</nav>
+{% endblock %}
+{% block content %}
+<article><h1>{{ page.title }}</h1>{{ page.body }}</article>
+{% block more %}{% endblock %}
+{% endblock %}
+{% block footer %}
+<footer>{{ site.title }} by {{ site.author }}</footer>
+{% endblock %}
