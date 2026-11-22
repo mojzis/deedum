@@ -143,11 +143,21 @@ def _execute(site: Site, module: str, file: Path) -> Any:
     return mod
 
 
+_INSTALLED = frozenset({"site-packages", "dist-packages"})
+
+
 def _forget(before: set[str], root: Path) -> None:
-    """Drop modules the app imported from the site root, so a rebuild re-reads them."""
+    """Drop modules the app imported from the site root, so a rebuild re-reads them.
+
+    Installed packages stay, even from a ``.venv`` under the root: some (numpy)
+    refuse to be imported twice in one process.
+    """
     for key in set(sys.modules) - before:
         file = getattr(sys.modules.get(key), "__file__", None)
-        if file and Path(file).resolve().is_relative_to(root):
+        if not file:
+            continue
+        path = Path(file).resolve()
+        if path.is_relative_to(root) and _INSTALLED.isdisjoint(path.parts):
             sys.modules.pop(key, None)
 
 
