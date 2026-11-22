@@ -358,6 +358,20 @@ def test_rebuild_sees_edited_sibling_and_forgets_it(tmp_path):
     assert sys.path == path_before
 
 
+def test_package_from_venv_under_root_stays_loaded(tmp_path, monkeypatch):
+    site = app_site(
+        tmp_path,
+        "import deedum, venvpkg\nclass S(deedum.App):\n    pass\n",
+        "site:S",
+    )
+    packages = site.root / ".venv" / "lib" / "python3" / "site-packages"
+    put(packages / "venvpkg" / "__init__.py", "LOADS = 1\n")
+    monkeypatch.syspath_prepend(str(packages))
+    monkeypatch.delitem(sys.modules, "venvpkg", raising=False)
+    load_app(site)
+    assert sys.modules["venvpkg"].LOADS == 1
+
+
 def test_sibling_shadowing_stdlib_does_not_stay(tmp_path):
     site = app_site(
         tmp_path,
